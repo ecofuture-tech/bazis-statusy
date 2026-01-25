@@ -1,0 +1,15 @@
+[project]
+name = "sample"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "bazis-statusy",
+    "bazis-author",
+    "bazis-test-utils",
+]
+
+[tool.uv.sources]
+bazis-statusy = { path = "../", editable = true }
+
+[tool.pytest.ini_options]
+django_settings_module = "sample.settings"

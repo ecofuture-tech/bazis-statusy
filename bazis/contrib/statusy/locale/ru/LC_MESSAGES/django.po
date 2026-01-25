@@ -1,0 +1,168 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-07-04 11:44+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || "
+"(n%100>=11 && n%100<=14)? 2 : 3);\n"
+#: __init__.py:19
+msgid "Transition error"
+msgstr "Ошибка перехода"
+
+#: apps.py:8
+msgid "Statusy"
+msgstr "Статусы"
+
+#: conf.py:15 models_abstract.py:152
+msgid "Initial status"
+msgstr "Исходный статус"
+
+#: conf.py:16
+msgid "Transit model"
+msgstr "Модель транзита"
+
+#: conf.py:17 models_abstract.py:66 router.py:8
+msgid "Status model"
+msgstr "Статусная модель"
+
+#: conf.py:19
+msgid "Transit relation model"
+msgstr "Модель отношений транзита"
+
+#: conf.py:25
+msgid "Default status must be a list of 2 elements"
+msgstr "По умолчанию статус должен быть списком из 2 элементов"
+
+#: models_abstract.py:67
+msgid "Status models"
+msgstr "Статусные модели"
+
+#: models_abstract.py:79 models_abstract.py:147
+msgid "Label"
+msgstr "Метка"
+
+#: models_abstract.py:80 models_abstract.py:148
+msgid "Name"
+msgstr "Наименование"
+
+#: models_abstract.py:84
+msgid "Status"
+msgstr "Статус"
+
+#: models_abstract.py:85
+msgid "Statuses"
+msgstr "Статусы"
+
+#: models_abstract.py:132
+msgid "Object access selector for child transition"
+msgstr "Селектор доступа к объекту для дочернего перехода"
+
+#: models_abstract.py:142
+msgid "Transit relation"
+msgstr "Связь перехода"
+
+#: models_abstract.py:143
+msgid "Transit relations"
+msgstr "Связи переходов"
+
+#: models_abstract.py:156
+msgid "Destination status"
+msgstr "Целевой статус"
+
+#: models_abstract.py:158
+msgid "Transit link in code"
+msgstr "Ссылка на переход в коде"
+
+#: models_abstract.py:160
+msgid "Transit validators"
+msgstr "Валидаторы перехода"
+
+#: models_abstract.py:164
+msgid "Actions before transit"
+msgstr "Действия перед переходом"
+
+#: models_abstract.py:168
+msgid "Actions after transit"
+msgstr "Действия после перехода"
+
+#: models_abstract.py:172
+msgid "Validate current status data during transition"
+msgstr "Валидировать данные текущего статуса при переходе"
+
+#: models_abstract.py:175
+msgid "Related transits"
+msgstr "Зависимые переходы"
+
+#: models_abstract.py:179
+msgid "Note"
+msgstr "Примечание"
+
+#: models_abstract.py:183 schemas.py:94
+msgid "Transit"
+msgstr "Переход"
+
+#: models_abstract.py:184
+msgid "Transits"
+msgstr "Переходы"
+
+#: models_abstract.py:217
+msgid "Current status"
+msgstr "Текущий статус"
+
+#: models_abstract.py:219 models_abstract.py:492
+msgid "Status timestamp"
+msgstr "Временная метка статуса"
+
+#: models_abstract.py:346
+msgid "The specified transition is not available for objects of this type"
+msgstr "Заданный переход недоступен для объектов этого типа"
+
+#: models_abstract.py:354
+msgid "This transition requires a payload"
+msgstr "Этот переход требует сопутствующих данных"
+
+#: models_abstract.py:497
+msgid "Transit extra data"
+msgstr "Дополнительные данные перехода"
+
+#: models_abstract.py:502
+msgid "Transit fact"
+msgstr "Факт перехода"
+
+#: models_abstract.py:503
+msgid "Transit facts"
+msgstr "Факты переходов"
+
+#: routes_abstract.py:205
+msgid "Transition permission is missing"
+msgstr "Отсутствует разрешение на переход"
+
+#: routes_abstract.py:210
+msgid "This action is not allowed for this type"
+msgstr "Это действие недоступно для этого типа"
+
+#: routes_abstract.py:271
+msgid "Object state actions"
+msgstr "Действия состояния объекта"
+
+#: routes_abstract.py:280
+msgid "Number of elements by status"
+msgstr "Кол-во элементов по статусам"
+
+#: routes_abstract.py:300
+msgid "Allowed statuses"
+msgstr "Допустимые статусы"
