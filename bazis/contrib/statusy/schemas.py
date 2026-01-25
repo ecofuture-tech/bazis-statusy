@@ -93,7 +93,7 @@ class StateActionSchema(BaseModel):
         super().__init__(**data)
 
     @field_validator('restricts', mode='before')
-    def restricts_to_dict(cls, v):
+    def restricts_to_dict(cls, v):  # noqa: N805
         if v and isinstance(v, JsonApiBazisException):
             return jsonable_encoder(
                 [

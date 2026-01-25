@@ -37,7 +37,7 @@ class Settings(BazisSettings):
     )
 
     @field_validator('BAZIS_STATUS_INITIAL', mode='before')
-    def status_check(cls, value):
+    def status_check(cls, value): # noqa: N805
         if not isinstance(value, list) or len(value) != 2:
             raise ValueError(_('Default status must be a list of 2 elements'))
         return value
