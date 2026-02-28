@@ -17,5 +17,5 @@ import os
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'sample.settings')
 
-from bazis.core.app import app  # noqa: E401
+from bazis.core.app import app  # noqa: F401
 

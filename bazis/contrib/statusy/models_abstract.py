@@ -26,6 +26,7 @@ from django.db.utils import ProgrammingError
 from django.utils.functional import cached_property
 from django.utils.timezone import now
 from django.utils.translation import gettext_lazy as _
+from django.core.exceptions import SynchronousOnlyOperation
 
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -172,16 +173,16 @@ class StatusBase(JsonApiMixin):
         #    and when importing routes from main.py we will get an error
         #    RuntimeError: Database access not allowed, use the "django_db" mark ...
         # """
+        simple_default = cls(id=settings.BAZIS_STATUS_INITIAL[0], **{
+            to_attribute('name', settings.LANGUAGE_CODE): settings.BAZIS_STATUS_INITIAL[1]
+        })
+
         try:
             for conn in connections.all(initialized_only=True)[:1]:
                 conn.cursor().execute('select 1')
-        except Exception as e:
-            traceback.print_exc()
-            logger.info(f"""
-            get_status_initial raise exception with not ready db connection {e}\n
-            if you run test - do not worry about this message, otherwise - it is PROBLEM!
-            """)
-            return None
+        except SynchronousOnlyOperation:
+            return simple_default
+
         try:
             table = cls._meta.db_table
             column = to_attribute('name')
@@ -199,9 +200,7 @@ class StatusBase(JsonApiMixin):
         except ProgrammingError as e:
             message = str(e)
             if '"statusy_status"' in message:
-                return cls(id=settings.BAZIS_STATUS_INITIAL[0], **{
-                    to_attribute('name', settings.LANGUAGE_CODE): settings.BAZIS_STATUS_INITIAL[1]
-                })
+                return simple_default
             raise e
 
 class TransitRelationManager(models.Manager):

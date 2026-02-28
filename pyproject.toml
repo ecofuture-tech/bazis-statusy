@@ -33,14 +33,14 @@ classifiers = [
     "Framework :: FastAPI",
 ]
 dependencies = [
-    "bazis",
-    "bazis-permit",
+    "bazis>=2.2.0",
+    "bazis-permit>=2.2.0",
 ]
 
 [project.optional-dependencies]
 test = [
-    "bazis-test-utils",
-    "bazis-author",
+    "bazis-test-utils>=2.2.0",
+    "bazis-author>=2.2.0",
 ]
 dev = [
     "ruff"
