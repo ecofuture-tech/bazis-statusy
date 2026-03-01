@@ -273,7 +273,7 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
 
             # compute the request body data type
             body_type = create_model(
-                payload_type.__name__ + '_body_type',
+                getattr(payload_type, '__name__', 'DictOrNone') + '_body_type',
                 __base__=TransitActionEndpointBodySchema[payload_type],
                 transit=(Annotated[str, Field()], Field(default=transit.id)),
             )
