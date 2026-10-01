@@ -200,6 +200,29 @@ def test_transit(sample_app):
     )
     assert response.status_code == 403
 
+    # the status changes only through a transit: an update cannot set it
+    status_relation = {'data': {'id': status_active.id, 'type': 'statusy.status'}}
+    response = get_api_client(sample_app, user_1.jwt_build()).patch(
+        f'/api/v1/entity/parent_entity/{parent_entity_id}/',
+        json_data={
+            'data': {
+                'id': parent_entity_id,
+                'type': 'entity.parent_entity',
+                'bs:action': 'change',
+                'relationships': {'status': status_relation},
+            },
+        },
+    )
+    assert response.status_code == 200
+    assert ParentEntity.objects.get(pk=parent_entity_id).status_id == status_check.id
+    for relation in ('status', 'status_author'):
+        response = get_api_client(sample_app, user_1.jwt_build()).patch(
+            f'/api/v1/entity/parent_entity/{parent_entity_id}/relationships/{relation}',
+            json_data=status_relation if relation == 'status' else {'data': None},
+        )
+        assert response.status_code == 403
+    assert ParentEntity.objects.get(pk=parent_entity_id).status_id == status_check.id
+
     # the correct transition is not available because the payload is not specified
     response = get_api_client(sample_app, user_1.jwt_build()).post(
         f'/api/v1/entity/parent_entity/{parent_entity_id}/transit/',
