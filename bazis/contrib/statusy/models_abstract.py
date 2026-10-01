@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import traceback
 from itertools import chain
 from typing import TYPE_CHECKING, Any
 
@@ -21,14 +20,14 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentTypeManager
 from django.contrib.postgres.fields import ArrayField
+from django.core.exceptions import SynchronousOnlyOperation
 from django.db import connections, models, transaction
 from django.db.utils import ProgrammingError
 from django.utils.functional import cached_property
 from django.utils.timezone import now
 from django.utils.translation import gettext_lazy as _
-from django.core.exceptions import SynchronousOnlyOperation
 
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from pydantic import BaseModel, ValidationError
 
@@ -159,9 +158,28 @@ class StatusBase(JsonApiMixin):
     def __str__(self):
         return self.name or str(self.id)
 
+    #: whether the table of the statuses exists with all its columns (see get_status_initial)
+    _status_table_ready = False
+
     @classmethod
     def get_id_example(cls):
         return settings.BAZIS_STATUS_INITIAL[0]
+
+    @classmethod
+    def _status_table_check(cls, conn, column) -> bool:
+        """
+        Whether the table of the statuses is migrated: the default status is also computed
+        while the migrations run.
+        """
+        table = cls._meta.db_table
+        if table not in conn.introspection.table_names():
+            return False
+        with conn.cursor() as cursor:
+            columns = {col.name for col in conn.introspection.get_table_description(cursor, table)}
+        if column not in columns:
+            logger.info('statusy_status columns not ready; skip default status creation')
+            return False
+        return True
 
     @classmethod
     def get_status_initial(cls):
@@ -184,16 +202,14 @@ class StatusBase(JsonApiMixin):
             return simple_default
 
         try:
-            table = cls._meta.db_table
             column = to_attribute('name')
-            for conn in connections.all(initialized_only=True)[:1]:
-                if table not in conn.introspection.table_names():
-                    return None
-                with conn.cursor() as cursor:
-                    columns = {col.name for col in conn.introspection.get_table_description(cursor, table)}
-                if column not in columns:
-                    logger.info('statusy_status columns not ready; skip default status creation')
-                    return None
+            # the schema is inspected once per process: the default status is computed for
+            # every created object, and the inspection queries the database catalog
+            if not cls._status_table_ready:
+                for conn in connections.all(initialized_only=True)[:1]:
+                    if not cls._status_table_check(conn, column):
+                        return None
+                    cls._status_table_ready = True
             return cls.objects.get_or_create(id=settings.BAZIS_STATUS_INITIAL[0], defaults={
                 column: settings.BAZIS_STATUS_INITIAL[1]
             })[0]
@@ -306,7 +322,7 @@ class TransitBase(JsonApiMixin):
             id_base = f'{self.model.model}#{self.status_src.pk}_to_{self.status_dst.pk}'
             # set of existing ids
             ids = set(
-                type(self).objects.filter(id__istartswith=self.id).values_list('id', flat=True)
+                type(self).objects.filter(id__istartswith=id_base).values_list('id', flat=True)
             )
 
             self.id = id_base
@@ -492,7 +508,7 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
                             e, loc=('payload',), item=self
                         ).errors
                     )
-                    raise JsonApiBazisException(errors, status=HTTP_422_UNPROCESSABLE_ENTITY) from e
+                    raise JsonApiBazisException(errors, status=HTTP_422_UNPROCESSABLE_CONTENT) from e
         else:
             payload_obj = payload_validate_none
 
@@ -516,7 +532,7 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
                                 err.item = self
                         errors.extend(errors_validation)
         if errors:
-            raise JsonApiBazisException(errors, status=HTTP_422_UNPROCESSABLE_ENTITY)
+            raise JsonApiBazisException(errors, status=HTTP_422_UNPROCESSABLE_CONTENT)
 
         return payload_obj
 

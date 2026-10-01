@@ -269,3 +269,23 @@ def test_transit(sample_app):
     assert all(
         child_entity.child_is_active is True for child_entity in parent_entity.child_entities.all()
     )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_status_default_queries():
+    """
+    The default status is computed for every created object: the database catalog is
+    inspected only once.
+    """
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    from bazis.contrib.statusy.models_abstract import status_default
+
+    assert status_default() == 'draft'
+    with CaptureQueriesContext(connection) as ctx:
+        for _ in range(5):
+            assert status_default() == 'draft'
+    catalog = [q for q in ctx.captured_queries if 'pg_catalog' in q['sql'] or 'information_schema' in q['sql']]
+    assert not catalog
+    assert len(ctx.captured_queries) <= 10
