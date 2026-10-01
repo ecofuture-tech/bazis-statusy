@@ -289,3 +289,26 @@ def test_status_default_queries():
     catalog = [q for q in ctx.captured_queries if 'pg_catalog' in q['sql'] or 'information_schema' in q['sql']]
     assert not catalog
     assert len(ctx.captured_queries) <= 10
+
+
+@pytest.mark.django_db
+def test_status_table_inspected_again_after_error(monkeypatch):
+    """
+    After an error on the table of the statuses (dropped and recreated, as in the tests or
+    when migrations are rolled back) the table is inspected again.
+    """
+    from django.db import ProgrammingError
+
+    def broken(*args, **kwargs):
+        raise ProgrammingError('relation "statusy_status" does not exist')
+
+    assert Status.get_status_initial().id == 'draft'
+    assert Status._status_table_ready
+
+    monkeypatch.setattr(Status.objects, 'get_or_create', broken)
+    assert Status.get_status_initial().id == 'draft'
+    assert not Status._status_table_ready
+
+    monkeypatch.undo()
+    assert Status.get_status_initial().id == 'draft'
+    assert Status._status_table_ready

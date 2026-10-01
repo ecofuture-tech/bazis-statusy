@@ -214,6 +214,9 @@ class StatusBase(JsonApiMixin):
                 column: settings.BAZIS_STATUS_INITIAL[1]
             })[0]
         except ProgrammingError as e:
+            # the table can be dropped or recreated in the same process (tests, migrations
+            # rolled back): inspect it again next time
+            cls._status_table_ready = False
             message = str(e)
             if '"statusy_status"' in message:
                 return simple_default
