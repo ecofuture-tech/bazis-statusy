@@ -1,0 +1,72 @@
+# What the package is for and how to use it, for tools and AI agents (see AGENTS.md).
+# `import` paths and `check` ids are verified by tests/test_manifest.py.
+
+[package]
+name = "bazis-statusy"
+summary = "statuses of objects and transitions between them, with validators, actions and permissions"
+solves = [
+    "a workflow of an object: statuses and the allowed transitions between them",
+    "validate an object and run actions on a status change",
+    "who may perform which transition from which status (bazis-permit)",
+    "the history of status changes",
+]
+requires = ["bazis", "bazis-users", "bazis-permit"]
+pairs_well = ["bazis-author", "bazis-bulk"]
+
+[[extension_points]]
+name = "StatusyMixin"
+import = "bazis.contrib.statusy.models_abstract.StatusyMixin"
+use_when = "a model with a status and transitions"
+
+[[extension_points]]
+name = "StatusyChildMixin"
+import = "bazis.contrib.statusy.models_abstract.StatusyChildMixin"
+use_when = "a model whose status is the status of its parent (get_status_field)"
+
+[[extension_points]]
+name = "StatusyRouteSetBase"
+import = "bazis.contrib.statusy.routes_abstract.StatusyRouteSetBase"
+use_when = "every route of a StatusyMixin model: the transit endpoint and the permissions by status"
+
+[[extension_points]]
+name = "StatusySimpleRouteSetBase"
+import = "bazis.contrib.statusy.routes_abstract.StatusySimpleRouteSetBase"
+use_when = "the route of a StatusyChildMixin model"
+
+[[extension_points]]
+name = "transit_validator"
+import = "bazis.contrib.statusy.transit_validator"
+use_when = "a model method that checks a transit and raises TransitError"
+
+[[extension_points]]
+name = "transit_before"
+import = "bazis.contrib.statusy.transit_before"
+use_when = "a model method that runs before the status changes"
+
+[[extension_points]]
+name = "transit_after"
+import = "bazis.contrib.statusy.transit_after"
+use_when = "a model method that runs after the status changes"
+
+[[extension_points]]
+name = "TransitError"
+import = "bazis.contrib.statusy.TransitError"
+use_when = "the error a validator raises (422)"
+
+[[extension_points]]
+name = "StatusyAdminMixin"
+import = "bazis.contrib.statusy.admin_abstract.StatusyAdminMixin"
+use_when = "the admin of a StatusyMixin model: read-only status fields and the transit history"
+
+[[pitfalls]]
+text = "the CREATE schema accepts an initial `status`: restrict it with `add` permissions by status, or exclude it"
+
+[[pitfalls]]
+text = "a route of a StatusyMixin model that does not inherit StatusyRouteSetBase has no transits and ignores the permissions by status"
+check = "statusy.W001"
+
+[[pitfalls]]
+text = "validators are also called with payload_validate_none (to build state_actions)"
+
+[[pitfalls]]
+text = "transit_apply() in code does not check the permissions of the user"
