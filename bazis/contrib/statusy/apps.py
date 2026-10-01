@@ -29,3 +29,5 @@ class StatusyConfig(BaseConfig):
         for model in StatusyChildMixin.get_inheritors():
             model._statusy_register()
 
+        from . import checks  # noqa: F401  registers the system checks
+

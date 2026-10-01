@@ -162,10 +162,12 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
     fields: dict[ApiAction, SchemaFields] = {
         CrudApiAction.CREATE: SchemaFields(
             include={'status': SchemaField(required=False)},
-            exclude={'status_dt': None},
+            exclude={'status_dt': None, 'status_author': None},
         ),
         CrudApiAction.UPDATE: SchemaFields(
-            exclude={'status_dt': None},
+            # the status changes only through the transit endpoint (its validators, hooks
+            # and permissions), which also sets its date and author
+            exclude={'status': None, 'status_dt': None, 'status_author': None},
         ),
     }
 
