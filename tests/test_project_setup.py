@@ -56,11 +56,24 @@ def test_migrations_do_not_depend_on_the_languages_of_the_project():
     assert done.returncode == 0, done.stdout[-3000:] + done.stderr[-3000:]
 
 
-def test_name_column_of_a_language_without_a_column(settings):
+def test_a_language_without_a_column():
+    """
+    In a language the fields have no column for, the names are read and written in the
+    fallback language, also the name of the default status.
+    """
     from django.utils import translation
 
+    from bazis.contrib.statusy.models import Status, Transit
     from bazis.contrib.statusy.models_abstract import LANGUAGES, name_column
 
+    fallback = LANGUAGES[0]
     with translation.override('de'):
-        assert name_column() == f'name_{LANGUAGES[0]}'
+        assert name_column() == f'name_{fallback}'
+        status, transit = Status(id='new'), Transit()
+        status.name, transit.name, transit.hint_title = 'New', 'Pay', 'Payment'
+        assert status.name == 'New'
+    assert getattr(status, f'name_{fallback}') == 'New'
+    assert getattr(transit, f'name_{fallback}') == 'Pay'
+    assert getattr(transit, f'hint_title_{fallback}') == 'Payment'
     assert name_column('hint_title', 'ru') == 'hint_title_ru'
+    assert name_column(language='en-us') == 'name_en'
