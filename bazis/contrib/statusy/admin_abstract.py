@@ -19,7 +19,7 @@ from django.apps import apps
 from django.contrib import admin
 from django.forms.models import BaseInlineFormSet
 
-from translated_fields import TranslatedFieldAdmin, to_attribute
+from translated_fields import TranslatedFieldAdmin
 
 from bazis.core.admin_abstract import AutocompleteMixin
 from bazis.core.utils.sets_order import OrderedSet
@@ -30,6 +30,7 @@ from . import (
     TRANSIT_LINK_STORE,
     TRANSIT_VALIDATORS_STORE,
 )
+from .models_abstract import name_column
 
 
 statusy_content_type_id = ContextVar('statusy_content_type_id')
@@ -169,7 +170,7 @@ class StatusyAdminMixin:
                 super().get_search_fields(request)
                 + (
                     'status__id',
-                    f'status__{to_attribute("name")}',
+                    f'status__{name_column()}',
                 )
             )
         )

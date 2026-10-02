@@ -22,9 +22,10 @@ from django.contrib.contenttypes.models import ContentTypeManager
 from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import SynchronousOnlyOperation
 from django.db import connections, models, transaction
-from django.db.utils import ProgrammingError
+from django.db.utils import OperationalError, ProgrammingError
 from django.utils.functional import cached_property
 from django.utils.timezone import now
+from django.utils.translation import get_language
 from django.utils.translation import gettext_lazy as _
 
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
@@ -33,7 +34,7 @@ from pydantic import BaseModel, ValidationError
 
 from translated_fields import TranslatedFieldWithFallback, to_attribute
 
-from bazis.contrib.permit.models_abstract import PermitModelMixin
+from bazis.contrib.permit.models_abstract import PermitModelMixin, translated_languages
 from bazis.core.errors import JsonApiBazisException
 from bazis.core.models_abstract import InitialBase, JsonApiMixin, logger
 from bazis.core.utils.functools import get_func_sig_param
@@ -47,6 +48,19 @@ if TYPE_CHECKING:
     from bazis.contrib.statusy.routes_abstract import StatusyRouteSetBase
 
     User = get_user_model()
+
+
+#: the languages of the translated fields: the columns of the migrations of the package
+LANGUAGES = translated_languages('en', 'ru')
+
+
+def name_column(field: str = 'name', language: str | None = None) -> str:
+    """
+    The column of a translated field in a language (the current one by default), or in the
+    fallback language when the field has no column for it.
+    """
+    language = language or get_language()
+    return to_attribute(field, language if language in LANGUAGES else LANGUAGES[0])
 
 
 def status_default():
@@ -148,7 +162,9 @@ class StatusyContentTypeMixin(InitialBase):
 
 class StatusBase(JsonApiMixin):
     id = models.CharField(_('Label'), max_length=255, primary_key=True)
-    name = TranslatedFieldWithFallback(models.CharField(_('Name'), max_length=255, default='', blank=True))
+    name = TranslatedFieldWithFallback(
+        models.CharField(_('Name'), max_length=255, default='', blank=True), languages=LANGUAGES
+    )
 
     class Meta:
         abstract = True
@@ -192,17 +208,19 @@ class StatusBase(JsonApiMixin):
         #    RuntimeError: Database access not allowed, use the "django_db" mark ...
         # """
         simple_default = cls(id=settings.BAZIS_STATUS_INITIAL[0], **{
-            to_attribute('name', settings.LANGUAGE_CODE): settings.BAZIS_STATUS_INITIAL[1]
+            name_column(language=settings.LANGUAGE_CODE): settings.BAZIS_STATUS_INITIAL[1]
         })
 
         try:
             for conn in connections.all(initialized_only=True)[:1]:
                 conn.cursor().execute('select 1')
-        except SynchronousOnlyOperation:
+        except (SynchronousOnlyOperation, OperationalError):
+            # an async context, or no database yet: the routes and the checks of a project
+            # load without its database
             return simple_default
 
         try:
-            column = to_attribute('name')
+            column = name_column()
             # the schema is inspected once per process: the default status is computed for
             # every created object, and the inspection queries the database catalog
             if not cls._status_table_ready:
@@ -213,6 +231,8 @@ class StatusBase(JsonApiMixin):
             return cls.objects.get_or_create(id=settings.BAZIS_STATUS_INITIAL[0], defaults={
                 column: settings.BAZIS_STATUS_INITIAL[1]
             })[0]
+        except OperationalError:
+            return simple_default
         except ProgrammingError as e:
             # the table can be dropped or recreated in the same process (tests, migrations
             # rolled back): inspect it again next time
@@ -259,7 +279,9 @@ class TransitRelationBase(JsonApiMixin):
 
 class TransitBase(JsonApiMixin):
     id = models.CharField(_('Label'), max_length=255, primary_key=True)
-    name = TranslatedFieldWithFallback(models.CharField(_('Name'), max_length=255, default='', blank=True))
+    name = TranslatedFieldWithFallback(
+        models.CharField(_('Name'), max_length=255, default='', blank=True), languages=LANGUAGES
+    )
     model = models.ForeignKey('statusy.StatusyContentType', related_name='transits', on_delete=models.CASCADE)
     status_src = models.ForeignKey(
         settings.BAZIS_STATUSY_STATUS_MODEL,
@@ -304,7 +326,9 @@ class TransitBase(JsonApiMixin):
         through_fields=('transit_parent', 'transit_child'),
     )
     hint = models.TextField(_('Note'), null=True, blank=True)
-    hint_title = TranslatedFieldWithFallback(models.CharField(_('Note title'), max_length=255, null=True, blank=True))
+    hint_title = TranslatedFieldWithFallback(
+        models.CharField(_('Note title'), max_length=255, null=True, blank=True), languages=LANGUAGES
+    )
     hint_action = models.TextField(_('Note action'), null=True, blank=True)
 
     class Meta:
