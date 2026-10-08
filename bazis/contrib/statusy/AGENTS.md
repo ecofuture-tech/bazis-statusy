@@ -95,5 +95,7 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
   the route. Keep the invariants of the item there (a validator of a transit checks only
   that transit).
 - `item.transit_apply(transit, user, payload)` in code validates but does not check
-  permissions; `@transit_link` returns it bound to the transit whose `source_link` is the
+  permissions; a transit that does not start from the current status of the item fails
+  with 400 `ERR_TRANSIT` (`JsonApiBazisException`) before its validators, nothing written
+  (take the transit with `item.get_transit('<id>')`, None for another status); `@transit_link` returns it bound to the transit whose `source_link` is the
   method.

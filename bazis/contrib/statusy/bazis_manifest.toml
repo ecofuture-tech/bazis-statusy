@@ -69,4 +69,4 @@ check = "statusy.W001"
 text = "validators are also called with payload_validate_none (to build state_actions)"
 
 [[pitfalls]]
-text = "transit_apply() in code does not check the permissions of the user"
+text = "transit_apply() in code does not check the permissions of the user; it fails with ERR_TRANSIT for a transit that does not start from the current status of the item (take it with get_transit)"
