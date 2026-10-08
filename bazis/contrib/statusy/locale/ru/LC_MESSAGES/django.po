@@ -57,7 +57,7 @@ msgstr "Метка"
 
 #: models_abstract.py:80 models_abstract.py:148
 msgid "Name"
-msgstr "Наименование"
+msgstr "Название"
 
 #: models_abstract.py:84
 msgid "Status"
