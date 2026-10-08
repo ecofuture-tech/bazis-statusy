@@ -79,6 +79,11 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
 - A child object whose status is the parent's: `StatusyChildMixin` with
   `get_status_field()` returning the path (`'order__status_id'`); list its route in
   `routes_child` of the parent route to validate the children with it on a transit.
+- A transit validates the item once with `JsonApiMixin.validate_item` (bazis 2.9.0):
+  `changes.source == 'transit'`, `changes.fields` with `status`, `status_dt`,
+  `status_author` and the fields the actions set, `changes.user` the user of the transit;
+  a failure rolls the transit back (422 `ERR_ITEM_INVALID` on the transit endpoint). Keep
+  the invariants of the item there (a validator of a transit checks only that transit).
 - `item.transit_apply(transit, user, payload)` in code validates but does not check
   permissions; `@transit_link` returns it bound to the transit whose `source_link` is the
   method.

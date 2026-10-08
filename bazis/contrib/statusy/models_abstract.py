@@ -21,7 +21,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentTypeManager
 from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import SynchronousOnlyOperation
-from django.db import connections, models, transaction
+from django.db import connections, models
 from django.db.utils import OperationalError, ProgrammingError
 from django.utils.functional import cached_property
 from django.utils.timezone import now
@@ -40,6 +40,7 @@ from bazis.contrib.permit.models_abstract import (
     translated_column,
 )
 from bazis.core.errors import JsonApiBazisException
+from bazis.core.item_validation import defer_validate_item
 from bazis.core.models_abstract import InitialBase, JsonApiMixin, logger
 from bazis.core.utils.functools import get_func_sig_param
 from bazis.core.utils.orm import AbstractForeignKey
@@ -582,6 +583,10 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
           - Signature: (statusy_transit, payload).
         - The transition object is activated, setting the corresponding fields.
 
+        The item is validated (`JsonApiMixin.validate_item`) once, at the end of the
+        transition (of the request, inside a route), with the source `transit` and the
+        changes of all its saves; a failure rolls the transition back.
+
         :param transit: Transition object.
         :param user: User performing the transition.
         :param payload: Dictionary of additional transition data. Will be processed in a custom class.
@@ -593,7 +598,7 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         # reference to the current instance
         instance = self
 
-        with transaction.atomic(savepoint=False):
+        with defer_validate_item(self, source='transit', user=user, savepoint=False):
             # create the actual transition object in the context of the current object
             statusy_transit = self.create_statusy_transit(transit, user)
 
