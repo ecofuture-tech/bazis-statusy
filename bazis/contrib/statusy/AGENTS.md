@@ -84,7 +84,9 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
   relationships actions) needs neither and is not reported; it does not apply the
   permissions by status either: it is a route without permissions (see "another route of
   a protected model" in the guide of bazis-permit, `permit.W002`), its `get_queryset`
-  decides what it shows.
+  decides what it shows. To keep the permissions by status on a read-only route, inherit
+  `StatusyRouteSetBase` and list its `actions`; a plain `PermitRouteBase` does not apply the
+  status segment of the permissions (only `PermitStatusyHandler` does).
 - Validators are also called with `payload is payload_validate_none` (to build
   `state_actions`): check it before reading the payload.
 - Decorated methods are defined directly in a model class (or its mixin); `Transit` lists
