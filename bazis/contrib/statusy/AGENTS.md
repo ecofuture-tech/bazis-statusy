@@ -82,6 +82,10 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
 - A child object whose status is the parent's: `StatusyChildMixin` with
   `get_status_field()` returning the path (`'order__status_id'`); list its route in
   `routes_child` of the parent route to validate the children with it on a transit.
+  `StatusyChildMixin` is a `PermitModelMixin` (as `StatusyMixin`): its objects are
+  restricted by the permissions of the user, with selectors (`author`) and the status of
+  the parent (`entity.order_item.item.view.author.draft`), on its route and through the
+  relations (`included`, filters) of the other routes.
 - `item.transit_apply(transit, user, payload)` in code validates but does not check
   permissions; `@transit_link` returns it bound to the transit whose `source_link` is the
   method.

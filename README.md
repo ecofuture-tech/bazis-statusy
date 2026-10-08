@@ -172,6 +172,8 @@ Base mixin for models requiring a status system. Adds:
 Mixin for child objects whose status depends on the parent object. Enables:
 - Defining path to parent status
 - Automatic participation in validation during parent transitions
+- Permissions of bazis-permit (it is a `PermitModelMixin`): selectors such as `author` and
+  the status of the parent (`app.model.item.view.<selector>.<status>`)
 
 ### Decorators for Configuring Transitions
 
