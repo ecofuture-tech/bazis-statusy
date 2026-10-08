@@ -52,7 +52,10 @@ class OrderRouteSet(StatusyRouteSetBase):
 - `GET /{item_id}/schema_transit/`: the schema the object must satisfy before a transit with
   `is_schema_validate` (default true).
 - Meta: `state_actions` (retrieve: allowed transits, their body and `restricts` = the
-  validator errors), `status_aggs` and `status_allowed` (list).
+  validator errors), `status_aggs` (list: the counts by status of the visible objects with
+  the filter of the request without `status` and the search, applied by the services of
+  the route as the list does, so restricted to what the route shows) and `status_allowed`
+  (list).
 
 **Permissions.** On a statusy model the item permissions take the status of the object after the selector
 (`all` or a status id); a transit is the operation `transit` with the transit id last:
