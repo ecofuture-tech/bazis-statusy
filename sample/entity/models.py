@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -129,6 +130,14 @@ class ParentEntity(StatusyMixin, AuthorMixin, DtMixin, UuidMixin, JsonApiMixin, 
     class Meta:
         verbose_name = _('Parent entity')
         verbose_name_plural = _('Parent entities')
+
+    #: the calls of validate_item, for the tests: (pk, changes)
+    validate_calls = []
+
+    def validate_item(self, changes):
+        self.validate_calls.append((self.pk, changes))
+        if self.status_id == 'active' and self.dt_approved is None:
+            raise ValidationError({'dt_approved': 'An active entity is approved'})
 
     @transit_validator('Must active validator')
     def validator_must_active(self, transit: TransitBase, user, payload: ParentEntityValidatedSchema):

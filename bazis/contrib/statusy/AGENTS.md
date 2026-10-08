@@ -86,6 +86,14 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
   restricted by the permissions of the user, with selectors (`author`) and the status of
   the parent (`entity.order_item.item.view.author.draft`), on its route and through the
   relations (`included`, filters) of the other routes.
+- A transit validates the item once with `JsonApiMixin.validate_item` (bazis 2.10.0):
+  `changes.source == 'transit'`, `changes.fields` with `status`, `status_dt`,
+  `status_author` and the fields the actions set, `changes.user` the user of the transit;
+  a failure rolls the transit back (422 `ERR_ITEM_INVALID` on the transit endpoint). The
+  source and the user come from the outermost block: a transit inside a write of a route
+  (`hook_after_create`) is validated with that write, once, as `create` with the user of
+  the route. Keep the invariants of the item there (a validator of a transit checks only
+  that transit).
 - `item.transit_apply(transit, user, payload)` in code validates but does not check
   permissions; `@transit_link` returns it bound to the transit whose `source_link` is the
   method.
