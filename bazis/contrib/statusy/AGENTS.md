@@ -81,7 +81,10 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
 - Every JSON:API route that changes a statusy model inherits `StatusyRouteSetBase` (`statusy.W001`);
   the routes of `StatusyChildMixin` models inherit `StatusySimpleRouteSetBase`. A read-only
   route of the model (a projection that lists its `actions` without the create, update and
-  relationships actions) needs neither and is not reported.
+  relationships actions) needs neither and is not reported; it does not apply the
+  permissions by status either: it is a route without permissions (see "another route of
+  a protected model" in the guide of bazis-permit, `permit.W002`), its `get_queryset`
+  decides what it shows.
 - Validators are also called with `payload is payload_validate_none` (to build
   `state_actions`): check it before reading the payload.
 - Decorated methods are defined directly in a model class (or its mixin); `Transit` lists
@@ -119,12 +122,14 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
   has no author. Do not pass the user of the request for it: the history would say that
   he made a transit his permissions may not allow. A project that names its system actor
   passes a user of its own for it.
-- An automatic transit on create, in `hook_after_create` of the route: the transit is
-  validated with the create, once, as `create` with the user of the route
-  (`changes.user`, also for a transit without a user). Its validators run before that
-  validation: validate the new item first, so that an invalid one answers with the errors
+- An automatic transit on create, in `hook_after_create` of the route: by itself the
+  transit is validated with the create, once, as `create` with the user of the route
+  (`changes.user`, also for a transit without a user), but its validators run before that
+  validation. Validate the new item first, so that an invalid one answers with the errors
   of its fields (422 `ERR_ITEM_INVALID`), not with the error of the transit
-  (`ERR_TRANSIT`):
+  (`ERR_TRANSIT`); then the item is validated twice, `('create', user)` before the
+  transit and `('transit', user)` after it (keep `validate_item` cheap or check
+  `changes.source`):
 
   ```python
   from bazis.core.item_validation import defer_validate_item
@@ -135,7 +140,9 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
           if not item.room.requires_approval:
               with defer_validate_item() as scope:
                   scope.validate()
-              item.transit_apply(item.get_transit('confirm'), None)
+              # None if the transit does not start from the status of the new item
+              if transit := item.get_transit('confirm'):
+                  item.transit_apply(transit, None)
   ```
 
 - The history: `item.statusy_transits` (the model `<Model>StatusyTransit` of the app), one
