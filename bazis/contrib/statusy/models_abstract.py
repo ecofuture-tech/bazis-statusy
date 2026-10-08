@@ -584,8 +584,9 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         - The transition object is activated, setting the corresponding fields.
 
         The item is validated (`JsonApiMixin.validate_item`) once, at the end of the
-        transition (of the request, inside a route), with the source `transit` and the
-        changes of all its saves; a failure rolls the transition back.
+        transition, with the source `transit` and the changes of all its saves; inside a
+        write of a route (`hook_after_create`) at the end of that write, with its source
+        and user. A failure rolls the transition back.
 
         :param transit: Transition object.
         :param user: User performing the transition.
