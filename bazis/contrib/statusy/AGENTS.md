@@ -47,7 +47,8 @@ class OrderRouteSet(StatusyRouteSetBase):
 
 - `POST /{item_id}/transit/` with `{"transit": "<transit id>", "payload": {...}}`: 200 with
   the item (204 if the user can no longer view it); 403 if the user has no permission for
-  the transit or it does not start from the current status; 400 without a required
+  the transit or it does not start from the current status (from bazis-permit 2.8.0, 404
+  for an item the user cannot view, as for a missing one); 400 without a required
   payload; 422 with the errors of the payload and the validators.
 - `GET /{item_id}/schema_transit/`: the schema the object must satisfy before a transit with
   `is_schema_validate` (default true).
