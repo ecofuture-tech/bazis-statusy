@@ -52,7 +52,10 @@ class OrderRouteSet(StatusyRouteSetBase):
 - `GET /{item_id}/schema_transit/`: the schema the object must satisfy before a transit with
   `is_schema_validate` (default true).
 - Meta: `state_actions` (retrieve: allowed transits, their body and `restricts` = the
-  validator errors), `status_aggs` and `status_allowed` (list).
+  validator errors), `status_aggs` (list: the counts by status of the visible objects with
+  the filter of the request without `status` and the search, applied by the services of
+  the route as the list does, so restricted to what the route shows) and `status_allowed`
+  (list).
 
 **Permissions.** On a statusy model the item permissions take the status of the object after the selector
 (`all` or a status id); a transit is the operation `transit` with the transit id last:
@@ -79,6 +82,10 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
 - A child object whose status is the parent's: `StatusyChildMixin` with
   `get_status_field()` returning the path (`'order__status_id'`); list its route in
   `routes_child` of the parent route to validate the children with it on a transit.
+  `StatusyChildMixin` is a `PermitModelMixin` (as `StatusyMixin`): its objects are
+  restricted by the permissions of the user, with selectors (`author`) and the status of
+  the parent (`entity.order_item.item.view.author.draft`), on its route and through the
+  relations (`included`, filters) of the other routes.
 - A transit validates the item once with `JsonApiMixin.validate_item` (bazis 2.10.0):
   `changes.source == 'transit'`, `changes.fields` with `status`, `status_dt`,
   `status_author` and the fields the actions set, `changes.user` the user of the transit;

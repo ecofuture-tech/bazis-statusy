@@ -632,7 +632,14 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         )
 
 
-class StatusyChildMixin(JsonApiMixin):
+class StatusyChildMixin(PermitModelMixin, JsonApiMixin):
+    """
+    A model whose status is the status of its parent (`get_status_field`). It is protected
+    by permissions as the parent (`PermitModelMixin`): its route (StatusySimpleRouteSetBase)
+    and the relations of the other routes into it restrict its objects by the permissions
+    of the user, by selector and by the status of the parent.
+    """
+
     statusy_model: type[StatusyMixin] = None
 
     class Meta:

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from copy import copy
 from functools import partial
 from itertools import chain
 from typing import Annotated, Any
@@ -48,7 +49,6 @@ from bazis.core.schemas import (
     SchemaInclusions,
     meta_field,
 )
-from bazis.core.services.filtering import Filtering
 from bazis.core.services.includes import include_to_list
 from bazis.core.utils.functools import ExcIntercept, get_attr
 from bazis.core.utils.imp import import_class
@@ -329,18 +329,19 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
 
     @meta_field([CrudApiAction.LIST], title=_('Number of elements by status'), alias='status_aggs')
     def status_aggs(self) -> dict[str, int]:
-        # create a copy of the filtering query
+        # the filter of the request without the status
         query_filter = QueryDict(self.inject.filtering.query_str, mutable=True)
-        # remove the status parameter from it
         query_filter.pop('status', None)
+        filtering = copy(self.inject.filtering)
+        filtering.query_str = query_filter.urlencode('$|()[]~')
 
-        # apply filters without status + string search
+        # apply it and the search as the list does: they reach only what the route shows
+        # the user (the query scope of the route, Bazis 2.9)
         qs = self.restrict_queryset(self.get_queryset(), CrudAccessAction.VIEW)
-        qs = Filtering.qs_apply(
+        qs = filtering.apply(
             qs,
-            query_filter.urlencode('$|()[]~'),
             filters_aliases=self.filters_aliases,
-            fiter_context=self.get_fiter_context(),
+            fiter_context=self.get_fiter_context(route=self),
         )
         qs = self.inject.searching.apply(qs)
 

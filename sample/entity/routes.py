@@ -40,6 +40,7 @@ class ExtendedEntityRouteSet(StatusySimpleRouteSetBase):
 
 class ParentEntityRouteSet(StatusyRouteSetBase):
     model = apps.get_model('entity.ParentEntity')
+    search_fields = ['name']
 
     # add fields (extended_entity, dependent_entities) to schema
     fields = {

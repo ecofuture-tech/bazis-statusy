@@ -172,6 +172,8 @@ Base mixin for models requiring a status system. Adds:
 Mixin for child objects whose status depends on the parent object. Enables:
 - Defining path to parent status
 - Automatic participation in validation during parent transitions
+- Permissions of bazis-permit (it is a `PermitModelMixin`): selectors such as `author` and
+  the status of the parent (`app.model.item.view.<selector>.<status>`)
 
 ### Decorators for Configuring Transitions
 
@@ -657,7 +659,10 @@ If a `state_actions` element is represented as an array (not an object), this me
 
 #### status_aggs (list only)
 
-Aggregation of object count by statuses:
+Aggregation of object count by statuses: the objects of the list the user can view, with
+the filter of the request without its `status` key and with the search. The filter and the
+search are applied as the list applies them: since Bazis 2.9 they reach only the fields and
+the related objects the route shows the user (an invalid filter is 400 `ERR_FILTER`).
 
 ```json
 {
