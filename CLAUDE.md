@@ -6,6 +6,10 @@ methods of the model, and `StatusyRouteSetBase` exposes `POST /{id}/transit/` an
 available state actions. Transitions are permissions of bazis-permit
 (`app.model.item.transit.<selector>.<status>.<transit>`).
 
+Statuses and transits can be declared in the `workflow.py` module of an application
+(`declare.py`, with the shared helpers of `bazis.contrib.permit.declare`): a `post_migrate`
+receiver applies them once all the migrations are applied, `checks.py` validates them.
+
 The default status of a new object is computed for every created object
 (`status_default`): keep it cheap.
 

@@ -16,7 +16,7 @@
 Django system checks of bazis-statusy (see `manage.py bazis_doctor`).
 """
 
-from django.core.checks import Warning, register
+from django.core.checks import Error, Tags, Warning, register
 
 
 @register()
@@ -64,3 +64,69 @@ def check_routes_statusy(app_configs, **kwargs):
         and issubclass(route_cls.model, StatusyMixin)
         and not issubclass(route_cls, StatusyRouteSetBase)
     ]
+
+
+@register()
+def check_declarations(app_configs, **kwargs):
+    """
+    The workflows declared in the `workflow.py` modules: their models, ids, statuses and
+    methods (statusy.E001, statusy.E002), the transits of the declared permissions of
+    bazis-permit (statusy.E003) and the translations of their names (statusy.W002).
+    """
+    from .declare import declaration_messages, declarations
+
+    return declaration_messages(declarations())
+
+
+@register(Tags.database)
+def check_declarations_applied(app_configs, databases=None, **kwargs):
+    """
+    The database has the declared statuses and transits (statusy.W003) and no other transit
+    of a model with a declared workflow (statusy.W004): warnings, as `migrate` runs the
+    database checks before it applies the declarations. A declared transit id that is a
+    transit of another model is an error (statusy.E004): `migrate` could not apply it.
+    Skipped while migrations are not applied.
+    """
+    from bazis.contrib.permit.declare import migrations_complete
+
+    from .declare import apply_declarations, declaration_messages, declarations, orphans
+
+    workflows = declarations()
+    if any(it.is_serious() for it in declaration_messages(workflows)):
+        # statusy.E001 to statusy.E003
+        return []
+    messages = []
+    for using in databases or ():
+        if not migrations_complete(using):
+            continue
+        conflicts = []
+        changes = apply_declarations(using, workflows, dry_run=True, conflicts=conflicts)
+        messages.extend(
+            Error(
+                text,
+                hint='Rename the declared transit, or the transit of the other model in the admin.',
+                id='statusy.E004',
+            )
+            for text in conflicts
+        )
+        if changes:
+            messages.append(
+                Warning(
+                    f'The database {using} differs from the declared workflows: {"; ".join(changes)}.',
+                    hint='Run `manage.py migrate`: it applies the declarations.',
+                    id='statusy.W003',
+                )
+            )
+        if found := orphans(using, workflows):
+            messages.append(
+                Warning(
+                    f'The database {using} has transits of models with a declared workflow that '
+                    f'are not declared: {", ".join(found)}.',
+                    hint=(
+                        'Declare them, or delete them in the admin: deleting a transit deletes '
+                        'its history (the transit facts of the objects).'
+                    ),
+                    id='statusy.W004',
+                )
+            )
+    return messages
