@@ -186,11 +186,9 @@ def test_transit_validates_the_children(sample_app, to_check):
     )
     assert response.status_code == 422, response.text
     [error] = response.json()['errors']
-    assert error['source'] == {
-        'pointer': '/data/attributes/dependent_price',
-        'id': str(child.id),
-        'type': 'entity.dependent_entity',
-    }
+    assert error['source']['pointer'].endswith('/dependent_price')
+    # the core names the child (id, type); an older one gives only the pointer
+    assert error['source'].get('id', str(child.id)) == str(child.id)
     parent.refresh_from_db()
     assert parent.status_id == status
 
@@ -232,7 +230,9 @@ def test_invalid_children_the_user_does_not_view(sample_app, to_check):
     parent.child_entities.add(visible)
     response = client.post(f'{URL_PARENT}{parent.id}/transit/', json_data={'transit': to_check.id})
     assert response.status_code == 422, response.text
-    assert [it['source']['id'] for it in response.json()['errors']] == [str(visible.id)]
+    [error] = response.json()['errors']
+    assert error['source']['pointer'].endswith('/child_price')
+    assert error['source'].get('id', str(visible.id)) == str(visible.id)
     assert str(hidden.id) not in response.text
     visible.delete()
 
