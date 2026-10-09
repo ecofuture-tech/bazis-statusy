@@ -69,6 +69,12 @@ check = "statusy.W001"
 text = "validators are also called with payload_validate_none (to build state_actions)"
 
 [[pitfalls]]
+text = "the payload of a transit is one object with the fields of the pydantic models annotated as `payload` of all its validators and actions (item.transit_payload_type(transit)); a method without an annotated payload adds none"
+
+[[pitfalls]]
+text = "titles of payload fields: Field(title=gettext_lazy(...)), kept lazy (the schemas are generated in the language of the request); str() would fix the language of the process start"
+
+[[pitfalls]]
 text = "transit_apply() in code does not check the permissions of the user; a transit of another model or that does not start from the current status of the item fails with ERR_TRANSIT (400): take the transit with item.get_transit(id) (None unless it starts from the current status)"
 
 [[pitfalls]]
