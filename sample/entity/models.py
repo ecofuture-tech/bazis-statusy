@@ -31,6 +31,7 @@ from bazis.contrib.statusy.models_abstract import (
     StatusyTransit,
     TransitBase,
 )
+from bazis.contrib.statusy.schemas import payload_validate_none
 from bazis.contrib.users import get_user_model
 from bazis.core.models_abstract import DtMixin, JsonApiMixin, UuidMixin
 from bazis.core.triggers import FieldsTransferTrigger, FieldTransferSchema
@@ -141,6 +142,9 @@ class ParentEntity(StatusyMixin, AuthorMixin, DtMixin, UuidMixin, JsonApiMixin, 
 
     @transit_validator('Must active validator')
     def validator_must_active(self, transit: TransitBase, user, payload: ParentEntityValidatedSchema):
+        # state_actions checks the transit without a payload
+        if payload is payload_validate_none:
+            return
         if payload.must_active is True and self.is_active is not True:
             raise TransitError(_('This entity must be active'))
         elif payload.must_active is False and self.is_active is not False:

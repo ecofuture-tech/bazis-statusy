@@ -14,7 +14,9 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from django.utils.translation import gettext_lazy as _
+
+from pydantic import BaseModel, Field
 
 
 class ParentEntityValidatedSchema(BaseModel):
@@ -22,4 +24,5 @@ class ParentEntityValidatedSchema(BaseModel):
 
 
 class ParentEntityBeforeSchema(BaseModel):
-    dt_approved: datetime
+    # a lazy title: translated in the language of each JSON schema (a msgid of the package)
+    dt_approved: datetime = Field(title=_('Status timestamp'))

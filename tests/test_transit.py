@@ -238,6 +238,21 @@ def test_transit(sample_app):
     )
     assert response.status_code == 400
 
+    # the state action of the transit has the JSON schema of its body, the lazy titles of the
+    # payload in the language of the request
+    for language, title in (('en', 'Status timestamp'), ('ru', 'Временная метка статуса')):
+        response = get_api_client(sample_app, user_1.jwt_build()).get(
+            f'/api/v1/entity/parent_entity/{parent_entity_id}/',
+            params={'meta': 'state_actions'},
+            headers={'Accept-Language': language},
+        )
+        assert response.status_code == 200
+        [action] = response.json()['meta']['state_actions']
+        body = action['endpoint']['body']
+        assert body['properties']['transit']['default'] == transit_to_active.id
+        [payload] = body['$defs'].values()
+        assert payload['properties']['dt_approved']['title'] == title
+
     # the correct transition is not available because validation for is_active == True fails
     response = get_api_client(sample_app, user_1.jwt_build()).post(
         f'/api/v1/entity/parent_entity/{parent_entity_id}/transit/',
