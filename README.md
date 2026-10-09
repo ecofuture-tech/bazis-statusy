@@ -141,6 +141,33 @@ class OrderRouteSet(StatusyRouteSetBase):
 2. Create transitions between them
 3. Configure validators and actions if necessary
 
+### 6. Or declare them in the code
+
+The statuses and transits of a model can be declared in the `workflow.py` module of its
+application; `migrate` applies them (once all the migrations are applied, in one
+transaction, writing nothing when nothing changed):
+
+```python
+# orders/workflow.py
+from django.utils.translation import gettext_lazy as _
+
+from bazis.contrib.statusy.declare import Status, Transit, Workflow
+
+DRAFT = Status('draft', _('Draft'))
+PROCESSING = Status('processing', _('Processing'))
+
+WORKFLOWS = [
+    Workflow('orders.Order', [DRAFT, PROCESSING], [
+        Transit('start', _('Start'), DRAFT, PROCESSING, validators=['validate_can_start']),
+    ]),
+]
+```
+
+The names are English msgids translated by the catalogs of the project. Statuses and
+transits are never deleted by `migrate`: a transit removed from the code keeps its history
+and is reported by `manage.py check --database default` (`statusy.W004`).
+`manage.py bazis_doctor` validates the declarations (`statusy.E001` to `statusy.E003`).
+
 ## Core Concepts
 
 ### Statuses (Status)

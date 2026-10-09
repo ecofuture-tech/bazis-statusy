@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from django.db.models.signals import post_migrate
 from django.utils.translation import gettext_lazy as _
 
 from bazis.core.utils.apps import BaseConfig
@@ -30,4 +31,8 @@ class StatusyConfig(BaseConfig):
             model._statusy_register()
 
         from . import checks  # noqa: F401  registers the system checks
+        from .declare import post_migrate_apply
+
+        # the workflows of the workflow.py modules, once per migrate or flush
+        post_migrate.connect(post_migrate_apply, sender=self, dispatch_uid='statusy_declarations')
 

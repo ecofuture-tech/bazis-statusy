@@ -156,3 +156,49 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
   record per transit with `transit`, `status` (the new one), `dt`, `author` and `extra`
   (JSON, `{}`); order it by `dt`. `StatusyAdminMixin` shows it in the admin. A status
   written without a transit (`QuerySet.update(status=...)` in test data) has no record.
+
+## Workflows in the code (`workflow.py`)
+
+The statuses and transits of a product are declared in the `workflow.py` module of an
+application (needs bazis-permit 2.9: its roles are declared the same way in `roles.py`),
+not in data migrations:
+
+```python
+# shop/workflow.py
+from django.utils.translation import gettext_lazy as _
+from bazis.contrib.statusy.declare import Status, Transit, Workflow
+
+DRAFT, PAID = Status('draft', _('Draft')), Status('paid', _('Paid'))
+WORKFLOWS = [
+    Workflow('shop.Order', [DRAFT, PAID], [
+        Transit('to_paid', _('Pay'), DRAFT, PAID,
+                validators=['validator_paid'], actions_before=['before_date']),
+    ]),
+]
+```
+
+- `migrate` applies them (`post_migrate`, also sent by `flush`) once all the migrations
+  of the project are applied, in one transaction; applied again it writes nothing. The
+  statuses are shared by the models (one name per id); the transits of a declared model
+  get the declared name, statuses and methods (the other fields, `hint`,
+  `is_schema_validate`, `transits_related`, stay as the admin set them). The cached
+  content types (`ContentType`, `StatusyContentType`) are forgotten first: `flush` makes
+  them again with other ids.
+- Nothing is deleted: a status (its objects would be deleted, `on_delete=CASCADE`) nor a
+  transit of a declared model that is not declared (its history, the transit facts of the
+  objects, would be deleted): `statusy.W004` lists such transits. A declared transit id
+  that is a transit of another model in the database stops `migrate`.
+- Names: English msgids (`gettext_lazy`) translated into `name_en`/`name_ru` by the
+  catalogs of the project (`statusy.W002` lists the untranslated ones).
+- Tests: the test database is migrated, so the workflows are there, also after the flush
+  of a test with `transaction=True`; `bazis_test_utils` gives `apply_declarations()` and
+  the fixture `bazis_declared`.
+- `bazis.contrib.statusy.declare.apply_declarations(using, workflows=None, dry_run=False)`
+  returns the changes; `dry_run` only lists them.
+- Checks: `statusy.E001` (the model is a `StatusyMixin`, one workflow per model, the ids,
+  a transit between statuses of its workflow, a transit id unique among the models, one
+  name per status), `statusy.E002` (a validator or action that is not a method of the
+  model), `statusy.E003` (a permission of `roles.py` names a transit that is not declared
+  for its model, or a status the transit does not start from), `statusy.W002`; with a
+  database (`manage.py check --database default`, not `bazis_doctor`) `statusy.W003` (the
+  database differs: migrate) and `statusy.W004`.

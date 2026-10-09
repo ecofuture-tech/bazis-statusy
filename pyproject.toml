@@ -34,7 +34,7 @@ classifiers = [
 ]
 dependencies = [
     "bazis>=2.10.0",
-    "bazis-permit>=2.4.1",
+    "bazis-permit>=2.9.0",
 ]
 
 [project.optional-dependencies]

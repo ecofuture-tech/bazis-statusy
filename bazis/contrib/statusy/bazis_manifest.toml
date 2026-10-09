@@ -76,3 +76,32 @@ text = "the user of transit_apply(transit, user) is the author of the history re
 
 [[pitfalls]]
 text = "a transit in hook_after_create runs its validators before validate_item of the create: call `with defer_validate_item() as scope: scope.validate()` first so that an invalid item answers with the errors of its fields (the item is then validated twice: as create, then as transit)"
+
+[[extension_points]]
+name = "Workflow"
+import = "bazis.contrib.statusy.declare.Workflow"
+use_when = "the statuses and transits of a model declared in the WORKFLOWS of <app>/workflow.py, applied by migrate"
+
+[[pitfalls]]
+text = "a declared workflow names a StatusyMixin model, its transits go between its statuses, a transit id is unique among the models and a status has one name in all the workflows; an invalid declaration stops migrate"
+check = "statusy.E001"
+
+[[pitfalls]]
+text = "the validators and actions of a declared transit are methods of the model"
+check = "statusy.E002"
+
+[[pitfalls]]
+text = "a transit permission of roles.py (`<app>.<model>.item.transit.<selector>.<status>.<transit>`) names a declared transit of the model and its source status (or all)"
+check = "statusy.E003"
+
+[[pitfalls]]
+text = "the names of declared statuses and transits are English gettext_lazy msgids: translate them in the catalogs of the project"
+check = "statusy.W002"
+
+[[pitfalls]]
+text = "the declared workflows reach the database only by migrate (or flush): after a change of workflow.py run migrate; `manage.py check --database default` lists the differences"
+check = "statusy.W003"
+
+[[pitfalls]]
+text = "a transit removed from workflow.py is kept (its history references it, deleting it deletes the history): delete it in the admin if it must go"
+check = "statusy.W004"
