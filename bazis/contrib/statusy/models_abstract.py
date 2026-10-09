@@ -480,15 +480,15 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         schemas = SchemasStatusyPermit(route_cls, user, self)
         schemas[StatusyApiAction.TRANSIT].model_validate(self)
 
-        # validate all child entities
+        # validate all child entities with their transit schema: the permission of the
+        # transit is the one of this item
         for child_item in self.statusy_children_items:
             child_model = child_item.__class__
             child_route = route_cls._routes_child_dict.get(
                 child_model, child_model.get_default_route()
             )
-            child_schemas = SchemasStatusyPermit(child_route, user, child_item)
-            # perform validation
-            child_schemas[StatusyApiAction.TRANSIT].model_validate(child_item)
+            schema = SchemasStatusyPermit(child_route, user, child_item).schema_transit_of_child()
+            schema.model_validate(child_item)
 
     def transit_validation(self, transit: TransitBase, user, payload: dict | None) -> Any: # noqa: C901
         """

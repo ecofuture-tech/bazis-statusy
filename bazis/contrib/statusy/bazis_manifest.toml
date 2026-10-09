@@ -69,6 +69,9 @@ check = "statusy.W001"
 text = "validators are also called with payload_validate_none (to build state_actions)"
 
 [[pitfalls]]
+text = "a transit of the parent validates its StatusyChildMixin children with the transit schema of their route (the field permissions of the user for transit on the child model); it needs only the transit permission of the parent, no item.transit permission of the children (since 2.10.0)"
+
+[[pitfalls]]
 text = "the payload of a transit is one object with the fields of the pydantic models annotated as `payload` of all its validators and actions (item.transit_payload_type(transit)); a method without an annotated payload adds none"
 
 [[pitfalls]]

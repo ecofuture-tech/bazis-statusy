@@ -165,11 +165,21 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
   their method names. A transit runs in a transaction.
 - A child object whose status is the parent's: `StatusyChildMixin` with
   `get_status_field()` returning the path (`'order__status_id'`); list its route in
-  `routes_child` of the parent route to validate the children with it on a transit.
-  `StatusyChildMixin` is a `PermitModelMixin` (as `StatusyMixin`): its objects are
-  restricted by the permissions of the user, with selectors (`author`) and the status of
-  the parent (`entity.order_item.item.view.author.draft`), on its route and through the
-  relations (`included`, filters) of the other routes.
+  `routes_child` of the parent route to validate the children with it on a transit
+  (else the default route of the child model). `StatusyChildMixin` is a
+  `PermitModelMixin` (as `StatusyMixin`): its objects are restricted by the permissions
+  of the user, with selectors (`author`) and the status of the parent
+  (`entity.order_item.item.view.author.draft`), on its route and through the relations
+  (`included`, filters) of the other routes.
+- A transit of the parent with `is_schema_validate` validates the parent with its transit
+  schema and every child (all of them, also those the user does not view) with the
+  transit schema of its route: the fields with the restrictions of the field permissions
+  of the user for the transits of the child model
+  (`shop.order_item.field.transit.all.all.price.notnull`), a failure is 422. The
+  permission of the transit is the one of the parent
+  (`shop.order.item.transit.author.draft.submit`): grant no `transit` item permission of
+  the child models for it (since 2.10.0; before it the transit was 403 without them). Such
+  a permission only opens `GET /{item_id}/schema_transit/` of the child route.
 - A transit validates the item once with `JsonApiMixin.validate_item` (bazis 2.10.0):
   `changes.source == 'transit'`, `changes.fields` with `status`, `status_dt`,
   `status_author` and the fields the actions set, `changes.user` the user of the transit;

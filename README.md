@@ -472,8 +472,11 @@ class OrderRouteSet(StatusyRouteSetBase):
 The `routes_child` attribute defines a list of child routes for correct validation during transitions. When a parent object transition is executed, the system automatically:
 
 1. Validates all child objects through their routes
-2. Checks child objects' compliance with their schemas
-3. Considers user's access rights to child objects
+2. Checks child objects' compliance with their transit schemas
+3. Applies the field permissions of the user for the transits of the child models
+   (`app.child.field.transit.<selector>.<status>.<field>.<restriction>`); the permission of
+   the transit itself is the one of the parent, the child models need no `transit` item
+   permission (since 2.10.0)
 
 **Example with multiple child routes:**
 
