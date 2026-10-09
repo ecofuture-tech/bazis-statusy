@@ -119,6 +119,6 @@ class TransitActionEndpointBodySchema[TransitPayloadSchemaT](BaseModel):
 
 class TransitActionSchema(StateActionSchema):
     code: Literal['ACTION_TRANSIT'] = Field(
-        'ACTION_TRANSIT', example='ACTION_TRANSIT', title='Transit'
+        'ACTION_TRANSIT', examples=['ACTION_TRANSIT'], title='Transit'
     )
     resource: CommonResourceSchema
