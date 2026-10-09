@@ -14,59 +14,19 @@
 
 from typing import Any, Literal, TypeVar, get_origin
 
-from django.utils.functional import Promise, cached_property
+from django.utils.functional import cached_property
 
 from fastapi.encoders import jsonable_encoder
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from pydantic.json_schema import GenerateJsonSchema, JsonSchemaMode, JsonSchemaValue
-
-from pydantic_core import CoreSchema
 
 from bazis.core.errors import JsonApiBazisException
 from bazis.core.schemas import AccessAction, ApiAction
-from bazis.core.utils.schemas import CommonResourceSchema
+from bazis.core.utils.schemas import CommonResourceSchema, TranslatedSchemaModel
 
 
 #: Stub for determining payload in validation mode
 payload_validate_none = object()
-
-
-def _translated(value: Any) -> Any:
-    if isinstance(value, Promise):
-        return str(value)
-    if isinstance(value, dict):
-        return {key: _translated(it) for key, it in value.items()}
-    if isinstance(value, list):
-        return [_translated(it) for it in value]
-    return value
-
-
-class TranslatedJsonSchema(GenerateJsonSchema):
-    """
-    A JSON schema whose lazy translations (`Field(title=_('...'))`, `description`) are strings
-    of the language active when it is generated: pydantic copies them as they are, and the
-    schema would not be a JSON document. The types stay lazy, so that every request (and the
-    contract export of bazis-front) gets the schema in its own language, as the schemas of
-    the core.
-    """
-
-    def generate(self, schema: CoreSchema, mode: JsonSchemaMode = 'validation') -> JsonSchemaValue:
-        return _translated(super().generate(schema, mode))
-
-
-class TranslatedSchemaModel(BaseModel):
-    """
-    A model whose `model_json_schema()` is a `TranslatedJsonSchema` by default: the base of
-    the payload type of a transit (`StatusyMixin.transit_payload_type`) and of the body of the
-    transit endpoint.
-    """
-
-    @classmethod
-    def model_json_schema(
-        cls, *args, schema_generator: type[GenerateJsonSchema] = TranslatedJsonSchema, **kwargs
-    ) -> dict[str, Any]:
-        return super().model_json_schema(*args, schema_generator=schema_generator, **kwargs)
 
 
 class StatusyAccessAction(AccessAction):

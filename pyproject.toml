@@ -33,7 +33,7 @@ classifiers = [
     "Framework :: FastAPI",
 ]
 dependencies = [
-    "bazis>=2.10.0",
+    "bazis>=2.14.0",
     "bazis-permit>=2.9.0",
 ]
 
