@@ -42,10 +42,11 @@ from bazis.contrib.permit.models_abstract import (
 from bazis.core.errors import JsonApiBazisException
 from bazis.core.item_validation import defer_validate_item
 from bazis.core.models_abstract import InitialBase, JsonApiMixin, logger
+from bazis.core.schemas import CrudAccessAction
 from bazis.core.utils.functools import get_func_sig_param
 from bazis.core.utils.orm import AbstractForeignKey
 
-from . import TransitError
+from . import TransitChildrenError, TransitError
 from .schemas import StatusyApiAction, TranslatedSchemaModel, payload_validate_none
 
 
@@ -480,15 +481,30 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         schemas = SchemasStatusyPermit(route_cls, user, self)
         schemas[StatusyApiAction.TRANSIT].model_validate(self)
 
-        # validate all child entities
+        # validate all child entities with their transit schema: the permission of the
+        # transit is the one of this item. The errors of a child the user does not view do
+        # not disclose it: one error without the child and its fields, after the others
+        hidden_invalid = False
         for child_item in self.statusy_children_items:
             child_model = child_item.__class__
             child_route = route_cls._routes_child_dict.get(
                 child_model, child_model.get_default_route()
             )
-            child_schemas = SchemasStatusyPermit(child_route, user, child_item)
-            # perform validation
-            child_schemas[StatusyApiAction.TRANSIT].model_validate(child_item)
+            schema = SchemasStatusyPermit(child_route, user, child_item).schema_transit_of_child()
+            try:
+                schema.model_validate(child_item)
+            except ValidationError:
+                visible = child_route.restrict_queryset(
+                    child_model.objects.filter(pk=child_item.pk), CrudAccessAction.VIEW, user=user
+                )
+                if visible.exists():
+                    raise
+                hidden_invalid = True
+        if hidden_invalid:
+            raise JsonApiBazisException(
+                TransitChildrenError(_('Some related items are not valid for this transit')),
+                status=HTTP_422_UNPROCESSABLE_CONTENT,
+            )
 
     def transit_validation(self, transit: TransitBase, user, payload: dict | None) -> Any: # noqa: C901
         """

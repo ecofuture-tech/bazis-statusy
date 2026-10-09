@@ -26,9 +26,13 @@ from django.utils.translation import gettext_lazy as _
 
 from fastapi import Depends, Response
 
-from pydantic import Field, create_model
+from pydantic import BaseModel, Field, create_model
 
-from bazis.contrib.permit.routes_abstract import PermitRouteBase, SchemasPermit
+from bazis.contrib.permit.routes_abstract import (
+    PermitRouteBase,
+    SchemasPermit,
+    fields_restricts_collect,
+)
 from bazis.core.errors import JsonApi403Exception, JsonApiBazisException
 from bazis.core.routes_abstract.initial import http_get, http_post, inject_make
 from bazis.core.routes_abstract.jsonapi import (
@@ -47,6 +51,7 @@ from bazis.core.schemas import (
     SchemaFields,
     SchemaInclusion,
     SchemaInclusions,
+    SchemaResourceBuilder,
     meta_field,
 )
 from bazis.core.services.includes import include_to_list
@@ -96,6 +101,20 @@ class SchemasStatusyPermit(SchemasPermit):
     def build_schema_transit(self):
         helper = self.get_helper(StatusyApiAction.TRANSIT)
         return helper.build_schema(inclusions=list(helper.inclusions))
+
+    def schema_transit_of_child(self) -> type[BaseModel]:
+        """
+        The transit schema of a child of the transited item (`StatusyMixin.schema_validate`):
+        its fields with the restrictions of the field permissions of the user for the
+        transits of its model. The transit is the one of the parent, whose permission the
+        transit endpoint checked: the child needs no `transit` permission of its own.
+        """
+        factory = self.route_cls.schema_factories[StatusyApiAction.TRANSIT]
+        handler = self.permit_service.handler(StatusyAccessAction.TRANSIT, self.item_or_model)
+        fields = factory.fields_patch(fields_restricts_collect(handler.perms_field_values))
+        return factory.build_schema(
+            schema_resource=SchemaResourceBuilder(factory, fields=fields).build(), inclusions=[]
+        )
 
 
 class StatusyPermitRouteSetBase(PermitRouteBase):

@@ -151,6 +151,9 @@ msgstr "Факты переходов"
 msgid "Transition permission is missing"
 msgstr "Отсутствует разрешение на переход"
 
+msgid "Some related items are not valid for this transit"
+msgstr "Некоторые связанные объекты не подходят для этого перехода"
+
 #: routes_abstract.py:210
 msgid "This action is not allowed for this type"
 msgstr "Это действие недоступно для этого типа"

@@ -149,6 +149,9 @@ msgstr ""
 msgid "Transition permission is missing"
 msgstr ""
 
+msgid "Some related items are not valid for this transit"
+msgstr ""
+
 #: routes_abstract.py:210
 msgid "This action is not allowed for this type"
 msgstr ""
