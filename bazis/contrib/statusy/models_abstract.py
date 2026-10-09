@@ -588,11 +588,23 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         write of a route (`hook_after_create`) at the end of that write, with its source
         and user. A failure rolls the transition back.
 
+        A transition of another model, or one that does not start from the current status
+        of the object, fails as on the transit endpoint (`ERR_TRANSIT`), before its
+        validators: the transits of an item are those `get_transit` gives.
+
         :param transit: Transition object.
         :param user: User performing the transition.
         :param payload: Dictionary of additional transition data. Will be processed in a custom class.
         :return: Returns the object to which the transition was applied after all pre-processing.
         """
+        content_type = apps.get_model('statusy.StatusyContentType').objects.get_for_model(
+            type(self)
+        )
+        if transit.model_id != content_type.pk or transit.status_src_id != self.status_id:
+            raise JsonApiBazisException(
+                TransitError(_('This action is not allowed for this type'), item=self)
+            )
+
         # perform transition validation, obtaining the payload object (may be None)
         payload_obj = self.transit_validation(transit, user, payload)
 
