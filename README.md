@@ -476,7 +476,8 @@ The `routes_child` attribute defines a list of child routes for correct validati
 3. Applies the field permissions of the user for the transits of the child models
    (`app.child.field.transit.<selector>.<status>.<field>.<restriction>`); the permission of
    the transit itself is the one of the parent, the child models need no `transit` item
-   permission (since 2.10.0)
+   permission (since 2.10.0); invalid children the user cannot view answer one
+   `ERR_TRANSIT_CHILDREN_INVALID` error (422) that does not disclose them
 
 **Example with multiple child routes:**
 

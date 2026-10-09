@@ -166,25 +166,78 @@ def test_transit_of_a_parent_needs_no_permission_of_the_children(sample_app, to_
     assert response.json()['data']['relationships']['status']['data']['id'] == 'check'
 
 
+PRICED = 'entity.dependent_entity.field.transit.all.all.dependent_price.notnull'
+
+
 @pytest.mark.django_db(transaction=True)
 def test_transit_validates_the_children(sample_app, to_check):
     """
     The field permissions of the user for the transits of a child model apply to its
-    objects: a child that does not satisfy them stops the transit (422), nothing changes.
+    objects: a child that does not satisfy them stops the transit (422 with the error of
+    its field), nothing changes.
     """
-    user = user_with(
-        'transiting_priced',
-        *TRANSITING,
-        'entity.dependent_entity.field.transit.all.all.dependent_price.notnull',
-    )
+    user = user_with('transiting_priced', *TRANSITING, PRICED)
     parent = ParentEntityFactory()
-    DependentEntityFactory(parent_entity=parent, dependent_price=None)
+    child = DependentEntityFactory(parent_entity=parent, dependent_price=None)
     status = parent.status_id
 
     response = get_api_client(sample_app, user.jwt_build()).post(
         f'{URL_PARENT}{parent.id}/transit/', json_data={'transit': to_check.id}
     )
     assert response.status_code == 422, response.text
-    assert 'dependent_price' in response.text
+    [error] = response.json()['errors']
+    assert error['source'] == {
+        'pointer': '/data/attributes/dependent_price',
+        'id': str(child.id),
+        'type': 'entity.dependent_entity',
+    }
     parent.refresh_from_db()
     assert parent.status_id == status
+
+
+@pytest.mark.django_db(transaction=True)
+def test_invalid_children_the_user_does_not_view(sample_app, to_check):
+    """
+    A child the user does not view is validated too, but its errors do not disclose it:
+    one error without the child and its fields. Those of the children he views come first.
+    """
+    viewing_no_dependent = [it for it in TRANSITING if not it.startswith('entity.dependent_')]
+    user = user_with('transiting_blind', *viewing_no_dependent, PRICED)
+    parent = ParentEntityFactory()
+    hidden = DependentEntityFactory(parent_entity=parent, dependent_price=None)
+    status = parent.status_id
+    client = get_api_client(sample_app, user.jwt_build())
+    assert client.get(f'/api/v1/entity/dependent_entity/{hidden.id}/').status_code in (403, 404)
+
+    response = client.post(f'{URL_PARENT}{parent.id}/transit/', json_data={'transit': to_check.id})
+    assert response.status_code == 422, response.text
+    assert response.json()['errors'] == [
+        {
+            'status': 422,
+            'title': 'Transition error',
+            'code': 'ERR_TRANSIT_CHILDREN_INVALID',
+            'detail': 'Some related items are not valid for this transit',
+        }
+    ]
+    assert str(hidden.id) not in response.text and 'dependent' not in response.text
+    parent.refresh_from_db()
+    assert parent.status_id == status
+
+    # a child he views that is invalid too: its own errors, not the hidden ones
+    child_priced = 'entity.child_entity.field.transit.all.all.child_price.notnull'
+    user.roles.first().groups_permission.first().permissions.add(
+        Permission.objects.get_or_create(slug=child_priced)[0]
+    )
+    visible = ChildEntityFactory(child_price=None)
+    parent.child_entities.add(visible)
+    response = client.post(f'{URL_PARENT}{parent.id}/transit/', json_data={'transit': to_check.id})
+    assert response.status_code == 422, response.text
+    assert [it['source']['id'] for it in response.json()['errors']] == [str(visible.id)]
+    assert str(hidden.id) not in response.text
+    visible.delete()
+
+    # valid, the transit is made
+    hidden.dependent_price = 1
+    hidden.save()
+    response = client.post(f'{URL_PARENT}{parent.id}/transit/', json_data={'transit': to_check.id})
+    assert response.status_code == 200, response.text

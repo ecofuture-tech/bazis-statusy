@@ -38,6 +38,15 @@ class TransitError(JsonApiBazisError):
     title = _('Transition error')
 
 
+class TransitChildrenError(TransitError):
+    """
+    Children of the transited item the user does not view are not valid for the transit:
+    the error names none of them nor their fields.
+    """
+
+    code = 'ERR_TRANSIT_CHILDREN_INVALID'
+
+
 def _register(store, func, name=None):
     # class and method name
     cls_name, method_name = func.__qualname__.split('.')

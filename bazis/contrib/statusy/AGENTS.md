@@ -175,8 +175,11 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
   schema and every child (all of them, also those the user does not view) with the
   transit schema of its route: the fields with the restrictions of the field permissions
   of the user for the transits of the child model
-  (`shop.order_item.field.transit.all.all.price.notnull`), a failure is 422. The
-  permission of the transit is the one of the parent
+  (`shop.order_item.field.transit.all.all.price.notnull`), a failure is 422: the errors of
+  the fields of a child the user views (`source` with its `id`, `type` and `pointer`);
+  for the children he does not view one error that names none of them,
+  `ERR_TRANSIT_CHILDREN_INVALID` `Some related items are not valid for this transit`
+  (only when no child he views is invalid). The permission of the transit is the one of the parent
   (`shop.order.item.transit.author.draft.submit`): grant no `transit` item permission of
   the child models for it (since 2.10.0; before it the transit was 403 without them). Such
   a permission only opens `GET /{item_id}/schema_transit/` of the child route.
