@@ -105,7 +105,7 @@ text = "the names of declared statuses and transits are English gettext_lazy msg
 check = "statusy.W002"
 
 [[pitfalls]]
-text = "the declared workflows reach the database only by migrate (or flush): after a change of workflow.py run migrate; `manage.py check --database default` lists the differences"
+text = "the declared workflows reach the database only by migrate (or flush): after a change of workflow.py run migrate; `manage.py bazis_doctor` (bazis 2.13; `manage.py check --database default` with an older core) lists the differences"
 check = "statusy.W003"
 
 [[pitfalls]]

@@ -275,6 +275,6 @@ WORKFLOWS = [
   model), `statusy.E003` (a permission of `roles.py` of a model with a declared workflow
   names a status that is not one of the workflow, a transit that is not declared for the
   model, or a status the transit does not start from), `statusy.W002`; with a database
-  (`manage.py check --database default`, not `bazis_doctor`) `statusy.W003` (the database
-  differs: migrate), `statusy.W004` and `statusy.E004` (a declared transit id is a transit
+  (`bazis_doctor` from bazis 2.13, against the database it reaches; with an older core only
+  `manage.py check --database default`) `statusy.W003` (the database differs: migrate), `statusy.W004` and `statusy.E004` (a declared transit id is a transit
   of another model).

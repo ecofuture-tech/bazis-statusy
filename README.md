@@ -165,7 +165,8 @@ WORKFLOWS = [
 
 The names are English msgids translated by the catalogs of the project. Statuses and
 transits are never deleted by `migrate`: a transit removed from the code keeps its history
-and is reported by `manage.py check --database default` (`statusy.W004`).
+and is reported (`statusy.W004`) by `manage.py bazis_doctor` from bazis 2.13, with an
+older core by `manage.py check --database default`.
 `manage.py bazis_doctor` validates the declarations (`statusy.E001` to `statusy.E003`).
 
 ## Core Concepts
