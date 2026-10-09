@@ -116,8 +116,9 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
 - `item.get_transit('<transit id>')` is the transit of the model with that id that starts
   from the current status of the item, else None (check it); `item.instance_transits`
   are all of them. Take the transit of `transit_apply` with it.
-- `item.transit_apply(transit, user, payload=None)` makes only a transit that starts from
-  the current status of the item: another one fails with 400 `ERR_TRANSIT`
+- `item.transit_apply(transit, user, payload=None)` makes only a transit of the model of
+  the item (its content type) that starts from the current status of the item, a transit
+  `get_transit` gives: another one fails with 400 `ERR_TRANSIT`
   (`JsonApiBazisException`) before its validators, nothing written. It runs the
   validators (with `user`), writes the history record, runs the actions before, sets
   `status`, `status_dt`, `status_author`, runs the actions after and returns the item

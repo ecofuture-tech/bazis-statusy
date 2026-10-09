@@ -69,7 +69,7 @@ check = "statusy.W001"
 text = "validators are also called with payload_validate_none (to build state_actions)"
 
 [[pitfalls]]
-text = "transit_apply() in code does not check the permissions of the user; a transit that does not start from the current status of the item fails with ERR_TRANSIT (400): take the transit with item.get_transit(id) (None unless it starts from the current status)"
+text = "transit_apply() in code does not check the permissions of the user; a transit of another model or that does not start from the current status of the item fails with ERR_TRANSIT (400): take the transit with item.get_transit(id) (None unless it starts from the current status)"
 
 [[pitfalls]]
 text = "the user of transit_apply(transit, user) is the author of the history record and status_author: a transit the system makes (an automatic confirmation) passes None, not the user of the request"

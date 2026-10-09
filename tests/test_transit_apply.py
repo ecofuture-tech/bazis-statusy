@@ -13,15 +13,17 @@
 # limitations under the License.
 
 """
-`transit_apply` in code makes only a transit that starts from the current status of the
-item, as the transit endpoint does: another one fails with `ERR_TRANSIT` and changes
-nothing.
+`transit_apply` in code makes only a transit of the model of the item that starts from its
+current status, as the transit endpoint does: another one fails with `ERR_TRANSIT` and
+changes nothing.
 """
 
 from datetime import UTC, datetime
 
+from django.contrib.contenttypes.models import ContentType
+
 import pytest
-from entity.models import ParentEntity
+from entity.models import ChildEntity, ParentEntity
 from translated_fields import to_attribute
 
 from bazis.contrib.statusy.models import Status, StatusyContentType, Transit
@@ -76,3 +78,24 @@ def test_transit_from_another_status_fails(transits):
 
     entity = entity.transit_apply(transits['back'], None)
     assert entity.status_id == 'draft'
+
+
+def test_transit_of_another_model_fails(transits):
+    """
+    A transit of another model, even from the current status, is not a transit of the item
+    (the content type of the transit is the model of the item, not a parent of it).
+    """
+    name_attr = to_attribute('name')
+    foreign = Transit.objects.create(
+        id='child_activate',
+        model_id=ContentType.objects.get_for_model(ChildEntity).pk,
+        status_src=transits['activate'].status_src,
+        status_dst=transits['activate'].status_dst,
+        **{name_attr: 'child_activate'},
+    )
+    entity = ParentEntity.objects.create(name='Entity', dt_approved=datetime(2026, 1, 1, tzinfo=UTC))
+
+    assert_not_from_the_status(entity, foreign)
+    entity = ParentEntity.objects.get(pk=entity.pk)
+    assert entity.status_id == 'draft'
+    assert not entity.statusy_transits.exists()
