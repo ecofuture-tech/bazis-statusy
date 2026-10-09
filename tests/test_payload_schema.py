@@ -16,7 +16,8 @@
 The JSON schemas of the payload of a transit: the lazy titles of its fields
 (`Field(title=_('...'))`) are strings of the language active when a schema is generated (the
 contract of bazis-front, the `state_actions` of a request), as the titles of the schemas of
-the core are.
+the core are: the payload type and the body of the transit endpoint are
+`TranslatedSchemaModel` of the core.
 """
 
 import json
@@ -34,6 +35,7 @@ from bazis.contrib.statusy.schemas import (
     TransitActionEndpointBodySchema,
     TransitActionSchema,
 )
+from bazis.core.utils.schemas import TranslatedSchemaModel
 
 
 TITLES = {'en': 'Status timestamp', 'ru': 'Временная метка статуса'}
@@ -48,6 +50,17 @@ def _payload_type():
     )
     # the class stands in for an object, as in the contract export of bazis-front
     return ParentEntity.transit_payload_type(ParentEntity, transit)
+
+
+def test_payload_schemas_of_the_core():
+    """
+    The lazy texts are translated by the generator of the core, not by one of the package.
+    """
+    from bazis.contrib.statusy import schemas
+
+    assert issubclass(_payload_type(), TranslatedSchemaModel)
+    assert issubclass(TransitActionEndpointBodySchema, TranslatedSchemaModel)
+    assert not hasattr(schemas, 'TranslatedJsonSchema')
 
 
 def test_payload_titles_translated_per_schema():

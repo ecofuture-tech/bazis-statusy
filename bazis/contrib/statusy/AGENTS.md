@@ -125,7 +125,9 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
   classmethod `schema_build(transit)` returns the model to use for each transit.
 - **The titles of the payload fields**: `Field(title=_('Reason'))` with `gettext_lazy`,
   kept lazy: the JSON schemas of the payload (the body of the transit in `state_actions`,
-  the contract of bazis-front) are generated in the language of the request (of the export).
+  the contract of bazis-front) are generated in the language of the request (of the export)
+  by `TranslatedJsonSchema` of the core (`bazis.core.utils.schemas`, bazis 2.14: the
+  payload type and the transit body are `TranslatedSchemaModel`).
   Do not wrap it in `str()`: the title would keep the language of the process start.
   Without a title, pydantic derives it from the field name (`must_active` → `Must Active`).
 

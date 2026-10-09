@@ -45,9 +45,10 @@ from bazis.core.models_abstract import InitialBase, JsonApiMixin, logger
 from bazis.core.schemas import CrudAccessAction
 from bazis.core.utils.functools import get_func_sig_param
 from bazis.core.utils.orm import AbstractForeignKey
+from bazis.core.utils.schemas import TranslatedSchemaModel
 
 from . import TransitChildrenError, TransitError
-from .schemas import StatusyApiAction, TranslatedSchemaModel, payload_validate_none
+from .schemas import StatusyApiAction, payload_validate_none
 
 
 if TYPE_CHECKING:
