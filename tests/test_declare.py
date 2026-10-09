@@ -161,6 +161,14 @@ def test_post_migrate_skips_an_incomplete_migration_plan(monkeypatch):
     assert applied == []
 
 
+def test_post_migrate_skips_a_database_without_the_transits(monkeypatch):
+    applied = []
+    monkeypatch.setattr(declare, 'apply_declarations', lambda using: applied.append(using) or [])
+    monkeypatch.setattr(declare.router, 'allow_migrate_model', lambda using, model: False)
+    declare.post_migrate_apply(sender=None, using='other')
+    assert applied == []
+
+
 def test_the_checks_of_the_sample_pass():
     assert check_declarations(None) == []
 

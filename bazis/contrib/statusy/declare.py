@@ -45,7 +45,7 @@ from django.apps import apps
 from django.contrib.contenttypes.models import ContentType
 from django.core.checks import CheckMessage, Error, Warning
 from django.core.exceptions import ImproperlyConfigured
-from django.db import DEFAULT_DB_ALIAS, transaction
+from django.db import DEFAULT_DB_ALIAS, router, transaction
 from django.utils import translation
 from django.utils.functional import Promise
 
@@ -386,6 +386,8 @@ def post_migrate_apply(sender, using=DEFAULT_DB_ALIAS, verbosity=1, **kwargs):
     The receiver of `post_migrate` (also sent by `flush`): applies the declarations once
     the migrations of the project are all applied.
     """
+    if not router.allow_migrate_model(using, apps.get_model('statusy.Transit')):
+        return
     if not migrations_complete(using):
         logger.info('Not all the migrations are applied: the declared workflows are not applied.')
         return
