@@ -258,7 +258,10 @@ WORKFLOWS = [
 - Nothing is deleted: a status (its objects would be deleted, `on_delete=CASCADE`) nor a
   transit of a declared model that is not declared (its history, the transit facts of the
   objects, would be deleted): `statusy.W004` lists such transits. A declared transit id
-  that is a transit of another model in the database stops `migrate`.
+  that is a transit of another model in the database stops `migrate` (`statusy.E004`).
+- A data migration of the product runs before the declarations are applied (they are
+  applied after the last migration): on a fresh database it cannot rely on the declared
+  statuses or transits.
 - Names: English msgids (`gettext_lazy`) translated into `name_en`/`name_ru` by the
   catalogs of the project (`statusy.W002` lists the untranslated ones).
 - Tests: the test database is migrated, so the workflows are there, also after the flush
@@ -269,7 +272,9 @@ WORKFLOWS = [
 - Checks: `statusy.E001` (the model is a `StatusyMixin`, one workflow per model, the ids,
   a transit between statuses of its workflow, a transit id unique among the models, one
   name per status), `statusy.E002` (a validator or action that is not a method of the
-  model), `statusy.E003` (a permission of `roles.py` names a transit that is not declared
-  for its model, or a status the transit does not start from), `statusy.W002`; with a
-  database (`manage.py check --database default`, not `bazis_doctor`) `statusy.W003` (the
-  database differs: migrate) and `statusy.W004`.
+  model), `statusy.E003` (a permission of `roles.py` of a model with a declared workflow
+  names a status that is not one of the workflow, a transit that is not declared for the
+  model, or a status the transit does not start from), `statusy.W002`; with a database
+  (`manage.py check --database default`, not `bazis_doctor`) `statusy.W003` (the database
+  differs: migrate), `statusy.W004` and `statusy.E004` (a declared transit id is a transit
+  of another model).

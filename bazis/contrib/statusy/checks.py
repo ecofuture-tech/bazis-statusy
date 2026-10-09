@@ -16,7 +16,7 @@
 Django system checks of bazis-statusy (see `manage.py bazis_doctor`).
 """
 
-from django.core.checks import Tags, Warning, register
+from django.core.checks import Error, Tags, Warning, register
 
 
 @register()
@@ -82,9 +82,10 @@ def check_declarations(app_configs, **kwargs):
 def check_declarations_applied(app_configs, databases=None, **kwargs):
     """
     The database has the declared statuses and transits (statusy.W003) and no other transit
-    of a model with a declared workflow (statusy.W004). Warnings: `migrate` runs the
-    database checks before it applies the declarations. Skipped while migrations are not
-    applied.
+    of a model with a declared workflow (statusy.W004): warnings, as `migrate` runs the
+    database checks before it applies the declarations. A declared transit id that is a
+    transit of another model is an error (statusy.E004): `migrate` could not apply it.
+    Skipped while migrations are not applied.
     """
     from bazis.contrib.permit.declare import migrations_complete
 
@@ -98,7 +99,17 @@ def check_declarations_applied(app_configs, databases=None, **kwargs):
     for using in databases or ():
         if not migrations_complete(using):
             continue
-        if changes := apply_declarations(using, workflows, dry_run=True):
+        conflicts = []
+        changes = apply_declarations(using, workflows, dry_run=True, conflicts=conflicts)
+        messages.extend(
+            Error(
+                text,
+                hint='Rename the declared transit, or the transit of the other model in the admin.',
+                id='statusy.E004',
+            )
+            for text in conflicts
+        )
+        if changes:
             messages.append(
                 Warning(
                     f'The database {using} differs from the declared workflows: {"; ".join(changes)}.',

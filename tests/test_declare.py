@@ -131,6 +131,24 @@ def test_a_transit_of_another_model_is_refused():
     with pytest.raises(ImproperlyConfigured, match='decl_send declared for entity.ParentEntity'):
         apply_declarations(workflows=[workflow(SEND)])
 
+    # the database check reports it as an error, without failing
+    conflicts = []
+    changes = apply_declarations(workflows=[workflow(SEND)], dry_run=True, conflicts=conflicts)
+    assert conflicts == [
+        'The transit decl_send declared for entity.ParentEntity is a transit of another model '
+        'in the database: rename it.'
+    ]
+    assert not any('decl_send' in it for it in changes)
+
+
+@pytest.mark.django_db
+def test_the_database_check_reports_a_transit_of_another_model(monkeypatch):
+    monkeypatch.setattr(declare, 'declarations', lambda: [('entity.workflow', workflow(SEND))])
+    apply_declarations()
+    TransitModel.objects.filter(pk='decl_send').update(model_id=ContentType.objects.get_for_model(ChildEntity).pk)
+    messages = check_declarations_applied(None, databases=['default'])
+    assert [(it.id, it.is_serious()) for it in messages] == [('statusy.E004', True)]
+
 
 @pytest.mark.django_db(transaction=True)
 def test_flush_applies_them_again_with_the_new_content_types(monkeypatch):
@@ -209,12 +227,18 @@ def test_the_transits_of_the_declared_permissions(monkeypatch):
         'entity.parent_entity.item.transit.all.all.decl_send',
         'entity.parent_entity.item.transit.all.decl_review.decl_send',
         'entity.parent_entity.item.transit.all.decl_draft.decl_missing',
+        'entity.parent_entity.item.view.all.decl_review',
+        'entity.parent_entity.item.change.author.decl_gone',
+        'entity.parent_entity.field.view.all.decl_nothing.name.disable',
+        'entity.parent_entity.field.view.all.all.name.disable',
     ])
     monkeypatch.setattr('bazis.contrib.permit.declare.declarations', lambda: ([('a.roles', group)], []))
     messages = errors(declaration_messages([('a.workflow', workflow(SEND))]))
-    assert [it.id for it in messages] == ['statusy.E003', 'statusy.E003']
+    assert [it.id for it in messages] == ['statusy.E003'] * 4
     assert 'the transit decl_send starts from the status decl_draft, not decl_review' in messages[0].msg
     assert 'names the transit decl_missing, which is not declared for entity.parent_entity' in messages[1].msg
+    assert 'item.change.author.decl_gone of the group decl_group names the status decl_gone' in messages[2].msg
+    assert 'names the status decl_nothing, which is not a status of the workflow' in messages[3].msg
 
 
 def test_untranslated_names_are_reported():

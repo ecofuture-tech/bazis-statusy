@@ -42,6 +42,7 @@ import sys
 from dataclasses import dataclass
 
 from django.apps import apps
+from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.core.checks import CheckMessage, Error, Warning
 from django.core.exceptions import ImproperlyConfigured
@@ -49,7 +50,13 @@ from django.db import DEFAULT_DB_ALIAS, router, transaction
 from django.utils import translation
 from django.utils.functional import Promise
 
-from bazis.contrib.permit.declare import discover, migrations_complete, translations, untranslated
+from bazis.contrib.permit.declare import (
+    discover,
+    lock,
+    migrations_complete,
+    translations,
+    untranslated,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -174,27 +181,41 @@ def _workflow_messages(module: str, workflow: Workflow, error) -> None:  # noqa:
 
 def _permission_messages(workflows: list[tuple[str, Workflow]], error) -> None:
     """
-    The transits of the declared permissions (bazis-permit) of the models with a declared
-    workflow: `<app>.<model>.item.transit.<selector>.<status>.<transit>`.
+    The declared permissions (bazis-permit) of the models with a declared workflow: their
+    status segment (`<app>.<model>.<item|field>.<operation>.<selector>.<status>…`) is a
+    status of the workflow or `all`, and a transit permission
+    (`<app>.<model>.item.transit.<selector>.<status>.<transit>`) names a declared transit
+    of the model and its source status.
     """
     from bazis.contrib.permit.declare import declarations as permit_declarations
 
-    transits = {}
+    declared = {}
     for _module, workflow in workflows:
         if (model := _model(workflow.model)) is not None and hasattr(model, 'get_resource_name'):
-            key = (model.get_resource_app(), model.get_resource_name())
-            transits[key] = {it.id: it for it in workflow.transits if isinstance(it, Transit)}
+            declared[(model.get_resource_app(), model.get_resource_name())] = (
+                {it.id for it in workflow.statuses if isinstance(it, Status)},
+                {it.id: it for it in workflow.transits if isinstance(it, Transit)},
+            )
 
     groups, _roles = permit_declarations()
     for module, group in groups:
         for slug in getattr(group, 'permissions', ()):
             parts = slug.split('.')
+            if len(parts) < 6 or (found := declared.get((parts[0], parts[1]))) is None:
+                continue
+            statuses, transits = found
+            status = parts[5]
+            if status != 'all' and status not in statuses:
+                error(
+                    f'The permission {slug} of the group {group.slug} names the status {status}, '
+                    f'which is not a status of the workflow of {parts[0]}.{parts[1]}.', module,
+                    id='statusy.E003',
+                )
+                continue
             if len(parts) != 7 or parts[2:4] != ['item', 'transit']:
                 continue
-            if (declared := transits.get((parts[0], parts[1]))) is None:
-                continue
-            status, transit_id = parts[5], parts[6]
-            if (transit := declared.get(transit_id)) is None:
+            transit_id = parts[6]
+            if (transit := transits.get(transit_id)) is None:
                 error(
                     f'The permission {slug} of the group {group.slug} names the transit '
                     f'{transit_id}, which is not declared for {parts[0]}.{parts[1]}.', module,
@@ -284,13 +305,26 @@ def _content_types():
     apps.get_model('statusy.StatusyContentType').objects.clear_cache()
 
 
+def _content_type(model, using: str, create: bool):
+    """
+    The content type of the model; without `create`, None if it does not exist yet
+    (`get_for_model` creates it).
+    """
+    content_types = ContentType.objects.db_manager(using)
+    if create:
+        return content_types.get_for_model(model)
+    return content_types.filter(app_label=model._meta.app_label, model=model._meta.model_name).first()
+
+
 def apply_declarations(
-    using: str = DEFAULT_DB_ALIAS, workflows=None, dry_run: bool = False
+    using: str = DEFAULT_DB_ALIAS, workflows=None, dry_run: bool = False, conflicts: list | None = None
 ) -> list[str]:
     """
     Applies the declared workflows (by default those of the `workflow.py` modules) to the
     database in one transaction and returns the changes; with `dry_run` only returns them.
-    Applied again, it writes nothing. A transit id of another model is an error.
+    Applied again, it writes nothing. A declared transit id that is a transit of another
+    model in the database is refused (ImproperlyConfigured); with `dry_run` it is added to
+    `conflicts` instead (the database check).
     """
     if workflows is None:
         workflows = declarations()
@@ -300,8 +334,8 @@ def apply_declarations(
             'Invalid declarations of workflows:\n' + '\n'.join(f'{it.id}: {it.msg}' for it in errors)
         )
 
-    status_model = apps.get_model('statusy.Status')
-    transit_model = apps.get_model('statusy.Transit')
+    status_model = apps.get_model(settings.BAZIS_STATUSY_STATUS_MODEL)
+    transit_model = apps.get_model(settings.BAZIS_STATUSY_TRANSIT_MODEL)
     changes = []
 
     def sync(model, pk: str, obj, label: str, values: dict) -> None:
@@ -320,29 +354,29 @@ def apply_declarations(
 
     _content_types()
     with transaction.atomic(using=using):
+        if not dry_run:
+            # concurrent migrate runs apply them one after the other
+            lock(using)
         statuses = {status.id: status for _module, workflow in workflows for status in workflow.statuses}
         existing = status_model.objects.using(using).in_bulk(list(statuses))
         for status_id, status in statuses.items():
             sync(status_model, status_id, existing.get(status_id), f'status {status_id}', translations(status.name))
 
-        content_types = ContentType.objects.db_manager(using)
         for _module, workflow in workflows:
-            model = apps.get_model(workflow.model)
-            if dry_run:
-                # get_for_model would create a missing one
-                content_type = content_types.filter(
-                    app_label=model._meta.app_label, model=model._meta.model_name
-                ).first()
-            else:
-                content_type = content_types.get_for_model(model)
+            content_type = _content_type(apps.get_model(workflow.model), using, create=not dry_run)
             existing = transit_model.objects.using(using).in_bulk([it.id for it in workflow.transits])
             for transit in workflow.transits:
                 obj = existing.get(transit.id)
                 if obj is not None and content_type is not None and obj.model_id != content_type.pk:
-                    raise ImproperlyConfigured(
+                    conflict = (
                         f'The transit {transit.id} declared for {workflow.model} is a transit of '
                         f'another model in the database: rename it.'
                     )
+                    if not dry_run:
+                        raise ImproperlyConfigured(conflict)
+                    if conflicts is not None:
+                        conflicts.append(conflict)
+                    continue
                 values = {
                     **translations(transit.name),
                     'model_id': content_type.pk if content_type else None,
@@ -364,12 +398,9 @@ def orphans(using: str = DEFAULT_DB_ALIAS, workflows=None) -> list[str]:
     if workflows is None:
         workflows = declarations()
     found = []
-    transit_model = apps.get_model('statusy.Transit')
+    transit_model = apps.get_model(settings.BAZIS_STATUSY_TRANSIT_MODEL)
     for workflow in (it[1] if isinstance(it, tuple) else it for it in workflows):
-        model = apps.get_model(workflow.model)
-        content_type = ContentType.objects.db_manager(using).filter(
-            app_label=model._meta.app_label, model=model._meta.model_name
-        ).first()
+        content_type = _content_type(apps.get_model(workflow.model), using, create=False)
         if content_type is None:
             continue
         found.extend(
@@ -386,7 +417,7 @@ def post_migrate_apply(sender, using=DEFAULT_DB_ALIAS, verbosity=1, **kwargs):
     The receiver of `post_migrate` (also sent by `flush`): applies the declarations once
     the migrations of the project are all applied.
     """
-    if not router.allow_migrate_model(using, apps.get_model('statusy.Transit')):
+    if not router.allow_migrate_model(using, apps.get_model(settings.BAZIS_STATUSY_TRANSIT_MODEL)):
         return
     if not migrations_complete(using):
         logger.info('Not all the migrations are applied: the declared workflows are not applied.')

@@ -97,7 +97,7 @@ text = "the validators and actions of a declared transit are methods of the mode
 check = "statusy.E002"
 
 [[pitfalls]]
-text = "a transit permission of roles.py (`<app>.<model>.item.transit.<selector>.<status>.<transit>`) names a declared transit of the model and its source status (or all)"
+text = "a permission of roles.py on a model with a declared workflow names one of its statuses (or all), and a transit permission (`<app>.<model>.item.transit.<selector>.<status>.<transit>`) a declared transit of the model and its source status (or all)"
 check = "statusy.E003"
 
 [[pitfalls]]
@@ -111,3 +111,10 @@ check = "statusy.W003"
 [[pitfalls]]
 text = "a transit removed from workflow.py is kept (its history references it, deleting it deletes the history): delete it in the admin if it must go"
 check = "statusy.W004"
+
+[[pitfalls]]
+text = "the id of a transit is unique among all the models: a declared transit id that is a transit of another model in the database stops migrate"
+check = "statusy.E004"
+
+[[pitfalls]]
+text = "a data migration runs before the declarations are applied (after the last migration): on a fresh database it cannot rely on the declared statuses or transits"
