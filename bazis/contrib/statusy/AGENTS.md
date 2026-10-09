@@ -72,11 +72,13 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
 ## Rules
 
 - The status changes only through `POST /{item_id}/transit/`: the UPDATE schema of
-  `StatusyRouteSetBase` has no `status`, `status_dt`, `status_author` (a `PATCH` with them
-  is ignored), the CREATE schema no `status_dt`, `status_author`; the `fields` of a route
-  add up with them, do not exclude them again. The CREATE schema accepts an initial
-  `status` (`BAZIS_STATUS_INITIAL` if omitted): restrict it with `add` permissions by
-  status, or exclude it (`CrudApiAction.CREATE: SchemaFields(exclude={'status': None})`).
+  `StatusyRouteSetBase` has no `status`, `status_dt`, `status_author`, the CREATE schema no
+  `status_dt`, `status_author` (a write with them is 422 `ERR_VALIDATE` `extra_forbidden`
+  from bazis 2.12, at `/data/relationships/<f>` or `/data/attributes/status_dt`; before it
+  they were ignored); the `fields` of a route add up with them, do not exclude them again.
+  The CREATE schema accepts an initial `status` (`BAZIS_STATUS_INITIAL` if omitted):
+  restrict it with `add` permissions by status, or exclude it
+  (`CrudApiAction.CREATE: SchemaFields(exclude={'status': None})`).
   `StatusyRouteSetBase` adds the actions `action_transit` and `action_schema_transit` and
   no hooks (those of bazis-permit apply).
 - Every JSON:API route that changes a statusy model inherits `StatusyRouteSetBase` (`statusy.W001`);
