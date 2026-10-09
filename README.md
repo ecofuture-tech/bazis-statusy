@@ -359,13 +359,14 @@ class OrderItem(StatusyChildMixin, DtMixin, UuidMixin, JsonApiMixin):
 #### Model with Payload for Transition
 
 ```python
+from django.utils.translation import gettext_lazy as _
 from pydantic import BaseModel, Field
-from datetime import datetime
 
 class CompleteOrderPayload(BaseModel):
     """Schema for order completion data"""
-    completion_note: str = Field(..., description='Completion note')
-    completed_by: str = Field(..., description='Completed by')
+    # lazy titles: the JSON schemas of the payload are in the language of the request
+    completion_note: str = Field(..., title=_('Completion note'))
+    completed_by: str = Field(..., title=_('Completed by'))
 
 class Order(StatusyMixin, DtMixin, UuidMixin, JsonApiMixin):
     # ... model fields ...

@@ -200,7 +200,9 @@ def test_transit(sample_app):
     )
     assert response.status_code == 403
 
-    # the status changes only through a transit: an update cannot set it
+    # the status changes only through a transit: an update cannot set it (it is not in the
+    # update schema: bazis 2.12 refuses such a field, 422 extra_forbidden; before it the
+    # update ignored it)
     status_relation = {'data': {'id': status_active.id, 'type': 'statusy.status'}}
     response = get_api_client(sample_app, user_1.jwt_build()).patch(
         f'/api/v1/entity/parent_entity/{parent_entity_id}/',
@@ -213,7 +215,11 @@ def test_transit(sample_app):
             },
         },
     )
-    assert response.status_code == 200
+    if response.status_code != 200:
+        assert response.status_code == 422, response.text
+        error = response.json()['errors'][0]
+        assert (error['code'], error['title']) == ('ERR_VALIDATE', 'extra_forbidden')
+        assert error['source']['pointer'] == '/data/relationships/status'
     assert ParentEntity.objects.get(pk=parent_entity_id).status_id == status_check.id
     for relation in ('status', 'status_author'):
         response = get_api_client(sample_app, user_1.jwt_build()).patch(
@@ -231,6 +237,21 @@ def test_transit(sample_app):
         },
     )
     assert response.status_code == 400
+
+    # the state action of the transit has the JSON schema of its body, the lazy titles of the
+    # payload in the language of the request
+    for language, title in (('en', 'Status timestamp'), ('ru', 'Временная метка статуса')):
+        response = get_api_client(sample_app, user_1.jwt_build()).get(
+            f'/api/v1/entity/parent_entity/{parent_entity_id}/',
+            params={'meta': 'state_actions'},
+            headers={'Accept-Language': language},
+        )
+        assert response.status_code == 200
+        [action] = response.json()['meta']['state_actions']
+        body = action['endpoint']['body']
+        assert body['properties']['transit']['default'] == transit_to_active.id
+        [payload] = body['$defs'].values()
+        assert payload['properties']['dt_approved']['title'] == title
 
     # the correct transition is not available because validation for is_active == True fails
     response = get_api_client(sample_app, user_1.jwt_build()).post(

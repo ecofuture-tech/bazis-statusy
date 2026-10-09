@@ -43,12 +43,38 @@ class OrderRouteSet(StatusyRouteSetBase):
   (Statusy > Status models: the transitions inline offers the decorated methods). Their
   names are the columns `name_en` and `name_ru` (as the roles of bazis-permit), whatever
   the languages of the project: a data migration sets both.
+- `StatusyContentType` is a proxy of the `ContentType` of Django limited to the statusy
+  models (its manager caches them: `StatusyContentType.objects.clear_cache()` in a test that
+  creates the transits). A data migration has no proxy managers and runs before the content
+  types are created: take the content type itself and set `model_id`:
+
+  ```python
+  def create_workflow(apps, schema_editor):
+      content_type = apps.get_model('contenttypes', 'ContentType').objects.get_or_create(
+          app_label='shop', model='order'
+      )[0]
+      status = apps.get_model('statusy', 'Status').objects
+      draft = status.update_or_create(id='draft', defaults={'name_en': 'Draft', 'name_ru': 'Черновик'})[0]
+      paid = status.update_or_create(id='paid', defaults={'name_en': 'Paid', 'name_ru': 'Оплачен'})[0]
+      apps.get_model('statusy', 'Transit').objects.update_or_create(
+          id='to_paid',
+          defaults={
+              'name_en': 'Pay', 'name_ru': 'Оплатить', 'model_id': content_type.pk,
+              'status_src': draft, 'status_dst': paid,
+              'validators': ['validator_paid'], 'actions_before': ['before_date'],
+          },
+      )
+  ```
+
+  Depend on `('contenttypes', '0002_remove_content_type_name')`, the latest migration of
+  `statusy` and of the app of the model.
 - Optionally `router.register('bazis.contrib.statusy.router')` (read-only statuses, transits).
 
 ## API of a StatusyRouteSetBase route
 
-- `POST /{item_id}/transit/` with `{"transit": "<transit id>", "payload": {...}}`: 200 with
-  the item (204 if the user can no longer view it); 403 if the user has no permission for
+- `POST /{item_id}/transit/` with the plain JSON body (not a JSON:API document)
+  `{"transit": "<transit id>", "payload": {...}}` (`payload` omitted or null for a transit
+  without a payload type, see below): 200 with the item (204 if the user can no longer view it); 403 if the user has no permission for
   the transit or it does not start from the current status (from bazis-permit 2.8.0, 404
   for an item the user cannot view, as for a missing one); 400 without a required
   payload; 422 with the errors of the payload and the validators.
@@ -59,6 +85,49 @@ class OrderRouteSet(StatusyRouteSetBase):
   the filter of the request without `status` and the search, applied by the services of
   the route as the list does, so restricted to what the route shows) and `status_allowed`
   (list).
+
+## Validators, actions and the payload
+
+The methods are listed by name in the `Transit`; `transit_apply` (and so the endpoint)
+calls them with these signatures:
+
+```python
+@transit_validator('Label')   # (self, transit, user, payload): raise to refuse
+def validator_x(self, transit: TransitBase, user, payload: XPayload): ...
+
+@transit_before('Label')      # (self, statusy_transit, payload): before the status is set
+def before_x(self, statusy_transit: StatusyTransit, payload: XPayload): ...
+
+@transit_after('Label')       # (self, statusy_transit, payload): after the status is set
+def after_x(self, statusy_transit: StatusyTransit, payload): ...
+```
+
+- A validator raises `TransitError('...')` (or `JsonApiBazisException`, a pydantic
+  `ValidationError`): the errors of all the validators are collected and answered together
+  with 422 (`TransitError` is `ERR_TRANSIT`).
+  `user` is the user of the transit (None for a system transit). A validator is also called
+  with `payload is payload_validate_none` to build the `restricts` of `state_actions`:
+  return early then, before reading the payload.
+- An action gets the history record `statusy_transit` (its `transit`, `author`, `extra`;
+  saved, the status not yet set for a before action) and the payload object. A before
+  action saves the changes of the item itself (`self.save()`); if it returns an object, the
+  next actions run on it and `transit_apply` returns it (read again). The return of an after
+  action is ignored. All
+  of it runs in one transaction with the history record.
+- **The payload type** comes from the annotations of the parameter `payload` of the
+  validators and the actions of the transit: each annotation is a pydantic model, and the
+  transit's payload type is one model inheriting all of them (`item.transit_payload_type
+  (transit)`): the client sends one `payload` object with the fields of all the models, it
+  is validated as a whole (422 with an error per invalid field, 400 `This transition
+  requires a payload` when it is missing), and every method receives that
+  same object. A `payload` without an annotation adds nothing; a transit whose methods have
+  no annotated `payload` has no payload type, the methods receive None. A model with a
+  classmethod `schema_build(transit)` returns the model to use for each transit.
+- **The titles of the payload fields**: `Field(title=_('Reason'))` with `gettext_lazy`,
+  kept lazy: the JSON schemas of the payload (the body of the transit in `state_actions`,
+  the contract of bazis-front) are generated in the language of the request (of the export).
+  Do not wrap it in `str()`: the title would keep the language of the process start.
+  Without a title, pydantic derives it from the field name (`must_active` → `Must Active`).
 
 **Permissions.** On a statusy model the item permissions take the status of the object after the selector
 (`all` or a status id); a transit is the operation `transit` with the transit id last:
@@ -72,11 +141,13 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
 ## Rules
 
 - The status changes only through `POST /{item_id}/transit/`: the UPDATE schema of
-  `StatusyRouteSetBase` has no `status`, `status_dt`, `status_author` (a `PATCH` with them
-  is ignored), the CREATE schema no `status_dt`, `status_author`; the `fields` of a route
-  add up with them, do not exclude them again. The CREATE schema accepts an initial
-  `status` (`BAZIS_STATUS_INITIAL` if omitted): restrict it with `add` permissions by
-  status, or exclude it (`CrudApiAction.CREATE: SchemaFields(exclude={'status': None})`).
+  `StatusyRouteSetBase` has no `status`, `status_dt`, `status_author`, the CREATE schema no
+  `status_dt`, `status_author` (a write with them is 422 `ERR_VALIDATE` `extra_forbidden`
+  from bazis 2.12, at `/data/relationships/<f>` or `/data/attributes/status_dt`; before it
+  they were ignored); the `fields` of a route add up with them, do not exclude them again.
+  The CREATE schema accepts an initial `status` (`BAZIS_STATUS_INITIAL` if omitted):
+  restrict it with `add` permissions by status, or exclude it
+  (`CrudApiAction.CREATE: SchemaFields(exclude={'status': None})`).
   `StatusyRouteSetBase` adds the actions `action_transit` and `action_schema_transit` and
   no hooks (those of bazis-permit apply).
 - Every JSON:API route that changes a statusy model inherits `StatusyRouteSetBase` (`statusy.W001`);

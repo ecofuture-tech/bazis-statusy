@@ -46,7 +46,7 @@ from bazis.core.utils.functools import get_func_sig_param
 from bazis.core.utils.orm import AbstractForeignKey
 
 from . import TransitError
-from .schemas import StatusyApiAction, payload_validate_none
+from .schemas import StatusyApiAction, TranslatedSchemaModel, payload_validate_none
 
 
 if TYPE_CHECKING:
@@ -468,8 +468,11 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         # deduplicate types
         payload_types = tuple(set(payload_types))
         payload_types_names = sorted([str(id(cl)) for cl in payload_types])
-        # return the resulting class
-        return type('PayloadType_' + ''.join(payload_types_names), payload_types, {})
+        # return the resulting class: its JSON schema has the lazy titles of the fields in the
+        # active language
+        return type(
+            'PayloadType_' + ''.join(payload_types_names), (*payload_types, TranslatedSchemaModel), {}
+        )
 
     def schema_validate(self, route_cls: type['StatusyRouteSetBase'], user: 'User'):
         from .routes_abstract import SchemasStatusyPermit

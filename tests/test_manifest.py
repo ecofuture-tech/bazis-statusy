@@ -33,6 +33,10 @@ def test_routes_without_transits(sample_app, monkeypatch):
     # the routes of the sample support transitions
     assert check_routes_statusy(None) == []
 
+    # a route class defined here becomes the default route of the model: restore the route
+    # of the sample for the other tests
+    monkeypatch.setattr(ParentEntity, '_default_route', ParentEntity._default_route)
+
     class PlainParentRoute(PermitRouteBase):
         model = ParentEntity
 
