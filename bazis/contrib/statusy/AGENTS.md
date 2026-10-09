@@ -40,7 +40,9 @@ class OrderRouteSet(StatusyRouteSetBase):
   (string `id`) and `Transit` (`id`, `model` =
   `StatusyContentType.objects.get_for_model(Order)`, `status_src`, `status_dst`, lists of
   method names `validators`, `actions_before`, `actions_after`) in code or in the admin
-  (Statusy > Status models: the transitions inline offers the decorated methods).
+  (Statusy > Status models: the transitions inline offers the decorated methods). Their
+  names are the columns `name_en` and `name_ru` (as the roles of bazis-permit), whatever
+  the languages of the project: a data migration sets both.
 - Optionally `router.register('bazis.contrib.statusy.router')` (read-only statuses, transits).
 
 ## API of a StatusyRouteSetBase route
@@ -69,12 +71,22 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
 ## Rules
 
 - The status changes only through `POST /{item_id}/transit/`: the UPDATE schema of
-  `StatusyRouteSetBase` has no `status` (a `PATCH` with it is ignored), and neither schema
-  has `status_author`. The CREATE schema accepts an initial `status`
-  (`BAZIS_STATUS_INITIAL` if omitted): restrict it with `add` permissions by status, or
-  exclude it (`CrudApiAction.CREATE: SchemaFields(exclude={'status': None})`).
+  `StatusyRouteSetBase` has no `status`, `status_dt`, `status_author` (a `PATCH` with them
+  is ignored), the CREATE schema no `status_dt`, `status_author`; the `fields` of a route
+  add up with them, do not exclude them again. The CREATE schema accepts an initial
+  `status` (`BAZIS_STATUS_INITIAL` if omitted): restrict it with `add` permissions by
+  status, or exclude it (`CrudApiAction.CREATE: SchemaFields(exclude={'status': None})`).
+  `StatusyRouteSetBase` adds the actions `action_transit` and `action_schema_transit` and
+  no hooks (those of bazis-permit apply).
 - Every JSON:API route that changes a statusy model inherits `StatusyRouteSetBase` (`statusy.W001`);
-  the routes of `StatusyChildMixin` models inherit `StatusySimpleRouteSetBase`.
+  the routes of `StatusyChildMixin` models inherit `StatusySimpleRouteSetBase`. A read-only
+  route of the model (a projection that lists its `actions` without the create, update and
+  relationships actions) needs neither and is not reported; it does not apply the
+  permissions by status either: it is a route without permissions (see "another route of
+  a protected model" in the guide of bazis-permit, `permit.W002`), its `get_queryset`
+  decides what it shows. To keep the permissions by status on a read-only route, inherit
+  `StatusyRouteSetBase` and list its `actions`; a plain `PermitRouteBase` does not apply the
+  status segment of the permissions (only `PermitStatusyHandler` does).
 - Validators are also called with `payload is payload_validate_none` (to build
   `state_actions`): check it before reading the payload.
 - Decorated methods are defined directly in a model class (or its mixin); `Transit` lists
@@ -97,3 +109,45 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
 - `item.transit_apply(transit, user, payload)` in code validates but does not check
   permissions; `@transit_link` returns it bound to the transit whose `source_link` is the
   method.
+
+## Transits in code and the history
+
+- `item.get_transit('<transit id>')` is the transit of the model with that id that starts
+  from the current status of the item, else None (check it); `item.instance_transits`
+  are all of them. Take the transit of `transit_apply` with it.
+- `item.transit_apply(transit, user, payload=None)` runs the validators (with `user`),
+  writes the history record, runs the actions before, sets `status`, `status_dt`,
+  `status_author`, runs the actions after and returns the item read again. It checks
+  neither the permissions of `user` nor `is_schema_validate` (the transit endpoint does).
+- The actor: `user` is the `author` of the history record and the `status_author`. A
+  transit the system makes (an automatic confirmation, a task) passes `None`: the record
+  has no author. Do not pass the user of the request for it: the history would say that
+  he made a transit his permissions may not allow. A project that names its system actor
+  passes a user of its own for it.
+- An automatic transit on create, in `hook_after_create` of the route: by itself the
+  transit is validated with the create, once, as `create` with the user of the route
+  (`changes.user`, also for a transit without a user), but its validators run before that
+  validation. Validate the new item first, so that an invalid one answers with the errors
+  of its fields (422 `ERR_ITEM_INVALID`), not with the error of the transit
+  (`ERR_TRANSIT`); then the item is validated twice, `('create', user)` before the
+  transit and `('transit', user)` after it (keep `validate_item` cheap or check
+  `changes.source`):
+
+  ```python
+  from bazis.core.item_validation import defer_validate_item
+
+  class BookingRouteSet(StatusyRouteSetBase):
+      def hook_after_create(self, item):
+          super().hook_after_create(item)
+          if not item.room.requires_approval:
+              with defer_validate_item() as scope:
+                  scope.validate()
+              # None if the transit does not start from the status of the new item
+              if transit := item.get_transit('confirm'):
+                  item.transit_apply(transit, None)
+  ```
+
+- The history: `item.statusy_transits` (the model `<Model>StatusyTransit` of the app), one
+  record per transit with `transit`, `status` (the new one), `dt`, `author` and `extra`
+  (JSON, `{}`); order it by `dt`. `StatusyAdminMixin` shows it in the admin. A status
+  written without a transit (`QuerySet.update(status=...)` in test data) has no record.

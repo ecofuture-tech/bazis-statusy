@@ -69,4 +69,10 @@ check = "statusy.W001"
 text = "validators are also called with payload_validate_none (to build state_actions)"
 
 [[pitfalls]]
-text = "transit_apply() in code does not check the permissions of the user"
+text = "transit_apply() in code does not check the permissions of the user: take the transit with item.get_transit(id) (None unless it starts from the current status)"
+
+[[pitfalls]]
+text = "the user of transit_apply(transit, user) is the author of the history record and status_author: a transit the system makes (an automatic confirmation) passes None, not the user of the request"
+
+[[pitfalls]]
+text = "a transit in hook_after_create runs its validators before validate_item of the create: call `with defer_validate_item() as scope: scope.validate()` first so that an invalid item answers with the errors of its fields (the item is then validated twice: as create, then as transit)"
