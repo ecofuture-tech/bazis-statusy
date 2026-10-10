@@ -87,7 +87,7 @@ def check_declarations_applied(app_configs, databases=None, **kwargs):
     transit of another model is an error (statusy.E004): `migrate` could not apply it.
     Skipped while migrations are not applied.
     """
-    from bazis.contrib.permit.declare import migrations_complete
+    from bazis.core.declare import migrations_complete
 
     from .declare import apply_declarations, declaration_messages, declarations, orphans
 

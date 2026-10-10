@@ -181,7 +181,7 @@ def test_flush_applies_them_again_with_the_new_content_types(monkeypatch):
 def test_post_migrate_skips_an_incomplete_migration_plan(monkeypatch):
     applied = []
     monkeypatch.setattr(declare, 'apply_declarations', lambda using: applied.append(using) or [])
-    monkeypatch.setattr(declare, 'migrations_complete', lambda using: False)
+    monkeypatch.setattr('bazis.core.declare.migrations_complete', lambda using: False)
     declare.post_migrate_apply(sender=None, using='default')
     assert applied == []
 
@@ -189,7 +189,7 @@ def test_post_migrate_skips_an_incomplete_migration_plan(monkeypatch):
 def test_post_migrate_skips_a_database_without_the_transits(monkeypatch):
     applied = []
     monkeypatch.setattr(declare, 'apply_declarations', lambda using: applied.append(using) or [])
-    monkeypatch.setattr(declare.router, 'allow_migrate_model', lambda using, model: False)
+    monkeypatch.setattr('django.db.router.allow_migrate_model', lambda using, model: False)
     declare.post_migrate_apply(sender=None, using='other')
     assert applied == []
 

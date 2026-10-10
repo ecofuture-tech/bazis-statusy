@@ -38,9 +38,7 @@ new object of the model (`BAZIS_STATUS_INITIAL` without it).
 """
 
 import functools
-import logging
 import re
-import sys
 from dataclasses import dataclass
 
 from django.apps import apps
@@ -48,14 +46,13 @@ from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.core.checks import CheckMessage, Error
 from django.core.exceptions import ImproperlyConfigured
-from django.db import DEFAULT_DB_ALIAS, router, transaction
+from django.db import DEFAULT_DB_ALIAS, transaction
 from django.utils import translation
 from django.utils.functional import Promise
 
-from bazis.contrib.permit.declare import discover, lock, migrations_complete, translations
+from bazis.contrib.permit.declare import translations
+from bazis.core.declare import apply_after_migrate, discover, lock
 
-
-logger = logging.getLogger(__name__)
 
 #: the id of a declared status or transit: a segment of the permission slugs
 ID = re.compile(r'^[a-z0-9_-]+$')
@@ -421,15 +418,7 @@ def post_migrate_apply(sender, using=DEFAULT_DB_ALIAS, verbosity=1, **kwargs):
     The receiver of `post_migrate` (also sent by `flush`): applies the declarations once
     the migrations of the project are all applied.
     """
-    if not router.allow_migrate_model(using, apps.get_model(settings.BAZIS_STATUSY_TRANSIT_MODEL)):
-        return
-    if not migrations_complete(using):
-        logger.info('Not all the migrations are applied: the declared workflows are not applied.')
-        return
-    changes = apply_declarations(using)
-    stdout = kwargs.get('stdout') or sys.stdout
-    if changes and verbosity >= 1:
-        stdout.write(f'  Applied the declared workflows: {len(changes)} change(s)\n')
-    if verbosity >= 2:
-        for change in changes:
-            stdout.write(f'    {change}\n')
+    apply_after_migrate(
+        apply_declarations, settings.BAZIS_STATUSY_TRANSIT_MODEL, 'workflows', using, verbosity,
+        kwargs.get('stdout'),
+    )
