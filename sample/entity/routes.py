@@ -15,6 +15,8 @@
 from django.apps import apps
 
 from bazis.contrib.statusy.routes_abstract import StatusyRouteSetBase, StatusySimpleRouteSetBase
+from bazis.contrib.statusy.schemas import TransitRequestSchema
+from bazis.core.routes_abstract.initial import http_post
 from bazis.core.schemas import SchemaFields
 
 
@@ -41,6 +43,8 @@ class ExtendedEntityRouteSet(StatusySimpleRouteSetBase):
 class ParentEntityRouteSet(StatusyRouteSetBase):
     model = apps.get_model('entity.ParentEntity')
     search_fields = ['name']
+    # the restrictions of the parent entities for the other routes
+    default_route = True
 
     # add fields (extended_entity, dependent_entities) to schema
     fields = {
@@ -48,3 +52,25 @@ class ParentEntityRouteSet(StatusyRouteSetBase):
             include={'extended_entity': None, 'dependent_entities': None},
         ),
     }
+
+
+class ParentEntityGuestRouteSet(StatusyRouteSetBase):
+    """
+    The transits of the parent entities open to anonymous users (with the transit
+    permissions of the roles for anonymous users): an override with `public=True`.
+    """
+
+    model = apps.get_model('entity.ParentEntity')
+    actions = ['action_transit']
+
+    @classmethod
+    def get_url_prefix(cls) -> str:
+        return '/entity/parent_entity_guest'
+
+    @http_post(
+        '/{item_id}/transit/',
+        public=True,
+        endpoint_callbacks=StatusyRouteSetBase.action_transit.endpoint_callbacks,
+    )
+    def action_transit(self, item_id: str, data: TransitRequestSchema, **kwargs):
+        return StatusyRouteSetBase.action_transit.func(self, item_id, data, **kwargs)

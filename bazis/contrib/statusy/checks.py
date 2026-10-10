@@ -70,8 +70,8 @@ def check_routes_statusy(app_configs, **kwargs):
 def check_declarations(app_configs, **kwargs):
     """
     The workflows declared in the `workflow.py` modules: their models, ids, statuses and
-    methods (statusy.E001, statusy.E002), the transits of the declared permissions of
-    bazis-permit (statusy.E003) and the translations of their names (statusy.W002).
+    methods (statusy.E001, statusy.E002) and the transits of the declared permissions of
+    bazis-permit (statusy.E003). The translations of their names: `bazis_messages status`.
     """
     from .declare import declaration_messages, declarations
 

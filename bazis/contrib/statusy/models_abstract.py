@@ -395,6 +395,18 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
     class Meta:
         abstract = True
 
+    def __init__(self, *args, **kwargs):
+        # a new object without a status (not one loaded from the database, which passes
+        # its values by position) gets the initial status its workflow declares
+        if not args and 'status' not in kwargs and 'status_id' not in kwargs:
+            from .declare import initial_statuses
+
+            initial = initial_statuses()
+            initial = initial.get(self._meta.label) or initial.get(self._meta.concrete_model._meta.label)
+            if initial is not None:
+                kwargs['status_id'] = initial
+        super().__init__(*args, **kwargs)
+
     @cached_property
     def statusy_children_items(self) -> list[JsonApiMixin]:
         for child_model, field_path in self._statusy_children_models_dict.items():
@@ -656,6 +668,9 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
 
     # set object status
     def create_statusy_transit(self, transit: TransitBase, author):
+        # an anonymous user (a public transit) is no author
+        if author is not None and author.is_anonymous:
+            author = None
         return self.statusy_transits.create(
             transit=transit,
             status=transit.status_dst,

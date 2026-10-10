@@ -34,8 +34,10 @@ class OrderRouteSet(StatusyRouteSetBase):
   `translated_fields`. Run `makemigrations`: `StatusyMixin` adds `status`, `status_dt`,
   `status_author` and a history model `<Model>StatusyTransit` in the same app
   (`item.statusy_transits`).
-- The initial status of new objects is `BAZIS_STATUS_INITIAL` (default `["draft", "Draft"]`,
-  `BS_BAZIS_STATUS_INITIAL='["new", "New"]'`); its `Status` row is created on first use.
+- The initial status of new objects is `Workflow(initial=...)` of the model (see Workflows
+  in the code), else `BAZIS_STATUS_INITIAL` (default `["draft", "Draft"]`,
+  `BS_BAZIS_STATUS_INITIAL='["new", "New"]'`, for all the models); its `Status` row is
+  created on first use.
 - Statuses and transitions are data (`bazis.contrib.statusy.models`): create `Status`
   (string `id`) and `Transit` (`id`, `model` =
   `StatusyContentType.objects.get_for_model(Order)`, `status_src`, `status_dst`, lists of
@@ -77,9 +79,38 @@ class OrderRouteSet(StatusyRouteSetBase):
   without a payload type, see below): 200 with the item (204 if the user can no longer view it); 403 if the user has no permission for
   the transit or it does not start from the current status (from bazis-permit 2.8.0, 404
   for an item the user cannot view, as for a missing one); 400 without a required
-  payload; 422 with the errors of the payload and the validators.
+  payload; 422 with the errors of the payload and the validators. An action of bazis-permit
+  (kind `other`): an anonymous user gets 403 even with a transit permission of a role for
+  anonymous users (bazis-statusy 2.12), unless the route overrides it with `public=True`
+  (below).
 - `GET /{item_id}/schema_transit/`: the schema the object must satisfy before a transit with
-  `is_schema_validate` (default true).
+  `is_schema_validate` (default true); kind `schema` in `x-bazis` (bazis-statusy 2.12).
+- A transit for anonymous users (a guest request, a public form): a route of its own that
+  overrides `action_transit` with `public=True` (limited by `BAZIS_THROTTLE_PUBLIC` per IP
+  address, or a `throttle` of its own); the transit permissions of the roles for anonymous
+  users (`Role(for_anonymous=True)`, selector `all`) still decide which transits they make,
+  and the transit has no author:
+
+  ```python
+  from bazis.contrib.statusy.schemas import TransitRequestSchema
+  from bazis.core.routes_abstract.initial import http_post
+
+  class RequestGuestRouteSet(StatusyRouteSetBase):
+      model = apps.get_model('service.Request')
+      actions = ['action_transit']
+
+      @classmethod
+      def get_url_prefix(cls) -> str:
+          return '/service/request_guest'
+
+      @http_post('/{item_id}/transit/', public=True,
+                 endpoint_callbacks=StatusyRouteSetBase.action_transit.endpoint_callbacks)
+      def action_transit(self, item_id: str, data: TransitRequestSchema, **kwargs):
+          return StatusyRouteSetBase.action_transit.func(self, item_id, data, **kwargs)
+  ```
+
+  Declare `default_route = True` on the main route of the model (a second route set of a
+  model, see the guide of the core).
 - Meta: `state_actions` (retrieve: allowed transits, their body and `restricts` = the
   validator errors), `status_aggs` (list: the counts by status of the visible objects with
   the filter of the request without `status` and the search, applied by the services of
@@ -147,7 +178,7 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
   `status_dt`, `status_author` (a write with them is 422 `ERR_VALIDATE` `extra_forbidden`
   from bazis 2.12, at `/data/relationships/<f>` or `/data/attributes/status_dt`; before it
   they were ignored); the `fields` of a route add up with them, do not exclude them again.
-  The CREATE schema accepts an initial `status` (`BAZIS_STATUS_INITIAL` if omitted):
+  The CREATE schema accepts an initial `status` (the initial status if omitted):
   restrict it with `add` permissions by status, or exclude it
   (`CrudApiAction.CREATE: SchemaFields(exclude={'status': None})`).
   `StatusyRouteSetBase` adds the actions `action_transit` and `action_schema_transit` and
@@ -259,9 +290,16 @@ WORKFLOWS = [
     Workflow('shop.Order', [DRAFT, PAID], [
         Transit('to_paid', _('Pay'), DRAFT, PAID,
                 validators=['validator_paid'], actions_before=['before_date']),
-    ]),
+    ], initial=DRAFT),
 ]
 ```
+
+- `initial=` (a status of the workflow or its id) is the status of a new object of the
+  model that is created without one (the API, `Order()`, `Order.objects.create()`; a loaded
+  object or an explicit `status` is kept), instead of the global `BAZIS_STATUS_INITIAL`
+  (bazis-statusy 2.12). The admin form of a new object still starts with the global
+  default: pick the status there. An initial status that is not a status of the workflow
+  is `statusy.E001`.
 
 - `migrate` applies them (`post_migrate`, also sent by `flush`) once all the migrations
   of the project are applied, in one transaction; applied again it writes nothing. The
@@ -278,7 +316,8 @@ WORKFLOWS = [
   applied after the last migration): on a fresh database it cannot rely on the declared
   statuses or transits.
 - Names: English msgids (`gettext_lazy`) translated into `name_en`/`name_ru` by the
-  catalogs of the project (`statusy.W002` lists the untranslated ones).
+  catalogs of the project (`manage.py bazis_messages status` lists the untranslated ones;
+  `statusy.W002` is removed in bazis-statusy 2.12).
 - Tests: the test database is migrated, so the workflows are there, also after the flush
   of a test with `transaction=True`; `bazis_test_utils` gives `apply_declarations()` and
   the fixture `bazis_declared`.
@@ -286,10 +325,10 @@ WORKFLOWS = [
   returns the changes; `dry_run` only lists them.
 - Checks: `statusy.E001` (the model is a `StatusyMixin`, one workflow per model, the ids,
   a transit between statuses of its workflow, a transit id unique among the models, one
-  name per status), `statusy.E002` (a validator or action that is not a method of the
+  name per status, the initial status is one of the workflow), `statusy.E002` (a validator or action that is not a method of the
   model), `statusy.E003` (a permission of `roles.py` of a model with a declared workflow
   names a status that is not one of the workflow, a transit that is not declared for the
-  model, or a status the transit does not start from), `statusy.W002`; with a database
+  model, or a status the transit does not start from); with a database
   (`bazis_doctor` from bazis 2.13, against the database it reaches; with an older core
   only `manage.py check --database default`) `statusy.W003` (the database differs:
   migrate), `statusy.W004` and `statusy.E004` (a declared transit id is a transit of

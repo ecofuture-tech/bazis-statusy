@@ -24,7 +24,7 @@ An application declares them in `<app>/workflow.py`::
     WORKFLOWS = [
         Workflow('support.Ticket', [NEW, IN_PROGRESS], [
             Transit('take', _('Take'), NEW, IN_PROGRESS, actions_before=['before_take']),
-        ]),
+        ], initial=NEW),
     ]
 
 After `migrate` (the `post_migrate` signal, once the migrations of the project are all
@@ -33,9 +33,11 @@ status declared by several workflows has one name) and the transits of the decla
 models are created or updated as declared. A status is never deleted (the objects in it
 would be); a transit of a declared model that is not declared is kept, as its history
 references it (the database check warns). The names are English msgids, translated into
-each `name_<language>` column by the catalogs of the project.
+each `name_<language>` column by the catalogs of the project. `initial` is the status of a
+new object of the model (`BAZIS_STATUS_INITIAL` without it).
 """
 
+import functools
 import logging
 import re
 import sys
@@ -44,19 +46,13 @@ from dataclasses import dataclass
 from django.apps import apps
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
-from django.core.checks import CheckMessage, Error, Warning
+from django.core.checks import CheckMessage, Error
 from django.core.exceptions import ImproperlyConfigured
 from django.db import DEFAULT_DB_ALIAS, router, transaction
 from django.utils import translation
 from django.utils.functional import Promise
 
-from bazis.contrib.permit.declare import (
-    discover,
-    lock,
-    migrations_complete,
-    translations,
-    untranslated,
-)
+from bazis.contrib.permit.declare import discover, lock, migrations_complete, translations
 
 
 logger = logging.getLogger(__name__)
@@ -101,18 +97,23 @@ class Transit:
 @dataclass(frozen=True)
 class Workflow:
     """
-    The statuses and the transits of a model (`app_label.Model` or the class).
+    The statuses and the transits of a model (`app_label.Model` or the class), and the
+    status of its new objects (`initial`, a status of the workflow or its id; None: the
+    global `BAZIS_STATUS_INITIAL`).
     """
 
     model: str | type
     statuses: tuple[Status, ...] = ()
     transits: tuple[Transit, ...] = ()
+    initial: str | None = None
 
     def __post_init__(self):
         if isinstance(self.model, type):
             object.__setattr__(self, 'model', self.model._meta.label)
         object.__setattr__(self, 'statuses', tuple(self.statuses))
         object.__setattr__(self, 'transits', tuple(self.transits))
+        if isinstance(self.initial, Status):
+            object.__setattr__(self, 'initial', self.initial.id)
 
 
 def declarations() -> list[tuple[str, Workflow]]:
@@ -121,6 +122,19 @@ def declarations() -> list[tuple[str, Workflow]]:
     module.
     """
     return discover('workflow', 'WORKFLOWS')
+
+
+@functools.cache
+def initial_statuses() -> dict[str, str]:
+    """
+    The declared initial status of the models (`Workflow.initial`) by model label, read
+    once per process (`initial_statuses.cache_clear()` after a change of the declarations).
+    """
+    return {
+        workflow.model: workflow.initial
+        for _module, workflow in declarations()
+        if isinstance(workflow, Workflow) and workflow.initial is not None
+    }
 
 
 def _model(label: str):
@@ -146,6 +160,11 @@ def _workflow_messages(module: str, workflow: Workflow, error) -> None:  # noqa:
         model = None
 
     statuses = {status.id for status in workflow.statuses if isinstance(status, Status)}
+    if workflow.initial is not None and workflow.initial not in statuses:
+        error(
+            f'The initial status {workflow.initial} of {workflow.model} is not a status of the '
+            'workflow.', module, id='statusy.E001',
+        )
     for it in (*workflow.statuses, *workflow.transits):
         kind = type(it).__name__.lower()
         if not isinstance(it, (Status, Transit)):
@@ -249,8 +268,8 @@ def _duplicate_messages(models: dict, statuses: dict, transits: dict, error) -> 
 
 def declaration_messages(workflows: list[tuple[str, Workflow]]) -> list[CheckMessage]:
     """
-    The problems of the declarations (statusy.E001 to statusy.E003, statusy.W002);
-    `apply_declarations` refuses declarations with errors.
+    The problems of the declarations (statusy.E001 to statusy.E003); `apply_declarations`
+    refuses declarations with errors. The translations of the names: `bazis_messages status`.
     """
     messages = []
 
@@ -275,21 +294,6 @@ def declaration_messages(workflows: list[tuple[str, Workflow]]) -> list[CheckMes
 
     if apps.is_installed('bazis.contrib.permit'):
         _permission_messages(workflows, error)
-
-    names = [
-        it.name for _module, workflow in workflows if isinstance(workflow, Workflow)
-        for it in (*workflow.statuses, *workflow.transits)
-        if isinstance(it, (Status, Transit)) and isinstance(it.name, (str, Promise)) and str(it.name)
-    ]
-    for language, missing in untranslated(list(dict.fromkeys(names))).items():
-        messages.append(
-            Warning(
-                f'The names of declared statuses or transits have no translation into '
-                f'{language}: {", ".join(dict.fromkeys(missing))}.',
-                hint='Translate them in the locale of the project (makemessages, compilemessages).',
-                id='statusy.W002',
-            )
-        )
     return messages
 
 

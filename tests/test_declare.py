@@ -42,6 +42,8 @@ from bazis.contrib.statusy.models import Status as StatusModel
 from bazis.contrib.statusy.models import StatusyContentType
 from bazis.contrib.statusy.models import Transit as TransitModel
 
+from tests.factories import ParentEntityFactory
+
 
 DRAFT = Status('decl_draft', _('Draft'))
 REVIEW = Status('decl_review', 'Review')
@@ -200,6 +202,7 @@ def test_the_checks_of_the_sample_pass():
         (workflow(Transit('Decl Go', 'Go', DRAFT, REVIEW)), "The id 'Decl Go' of a transit"),
         (workflow(Transit('decl_go', '', DRAFT, REVIEW)), 'The transit decl_go of entity.ParentEntity has no name'),
         (workflow(SEND, statuses=[DRAFT, Status('decl.review', 'Review')]), "The id 'decl.review' of a status"),
+        (Workflow('entity.ParentEntity', [DRAFT], initial='decl_done'), 'initial status decl_done of entity.ParentEntity is not'),
     ],
 )
 def test_invalid_workflows(declared, problem):
@@ -241,10 +244,40 @@ def test_the_transits_of_the_declared_permissions(monkeypatch):
     assert 'names the status decl_nothing, which is not a status of the workflow' in messages[3].msg
 
 
-def test_untranslated_names_are_reported():
-    messages = declaration_messages([('a.workflow', workflow(SEND))])
-    (warning,) = [it for it in messages if it.id == 'statusy.W002']
-    assert 'into ru: Draft, Review, Done, Send' in warning.msg
+@pytest.fixture
+def declared_initial(monkeypatch):
+    """The workflow of the parent entities declares its initial status, decl_review."""
+    declared = Workflow('entity.ParentEntity', [DRAFT, REVIEW, DONE], [SEND], initial=REVIEW)
+    monkeypatch.setattr(declare, 'declarations', lambda: [('entity.workflow', declared)])
+    declare.initial_statuses.cache_clear()
+    apply_declarations()
+    yield
+    declare.initial_statuses.cache_clear()
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures('declared_initial')
+def test_initial_status_of_a_workflow(settings):
+    """
+    A new object of a model whose workflow declares `initial` gets that status instead of
+    `BAZIS_STATUS_INITIAL`; a status given explicitly is kept, and a loaded object is not
+    changed.
+    """
+    assert settings.BAZIS_STATUS_INITIAL[0] != 'decl_review'
+    assert ParentEntity(name='a').status_id == 'decl_review'
+    item = ParentEntityFactory.create()
+    assert item.status_id == 'decl_review'
+    assert ParentEntity(name='b', status_id='decl_done').status_id == 'decl_done'
+    item.status_id = 'decl_done'
+    item.save()
+    assert ParentEntity.objects.get(pk=item.pk).status_id == 'decl_done'
+    # a model whose workflow declares none keeps the global default
+    assert ParentEntity.status.field.get_default() == settings.BAZIS_STATUS_INITIAL[0]
+
+
+def test_initial_status_normalized():
+    assert Workflow('entity.ParentEntity', [DRAFT], initial=DRAFT).initial == 'decl_draft'
+    assert Workflow('entity.ParentEntity', [DRAFT]).initial is None
 
 
 @pytest.mark.django_db

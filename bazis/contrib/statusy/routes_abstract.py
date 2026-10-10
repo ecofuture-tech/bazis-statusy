@@ -54,6 +54,7 @@ from bazis.core.schemas import (
     SchemaResourceBuilder,
     meta_field,
 )
+from bazis.core.schemas.enums import RouteKind
 from bazis.core.services.includes import include_to_list
 from bazis.core.utils.functools import ExcIntercept, get_attr
 from bazis.core.utils.imp import import_class
@@ -157,6 +158,7 @@ class StatusySimpleRouteSetBase(StatusyPermitRouteSetBase):
     @http_get(
         '/{item_id}/schema_transit/',
         response_model=dict[str, Any],
+        kind=RouteKind.SCHEMA,
         endpoint_callbacks=[
             partial(api_action_init, api_action=StatusyApiAction.TRANSIT),
         ],
