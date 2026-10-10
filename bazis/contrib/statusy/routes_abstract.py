@@ -245,8 +245,11 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
         # return the intersection of labels
         return list(labels_for_instance & labels_for_user)
 
+    # authenticated users (the transit permissions are checked in the action); a route
+    # for anonymous users declares it again: route_declare(action_transit, public=True)
     @http_post(
         '/{item_id}/transit/',
+        public=False,
         endpoint_callbacks=[
             partial(meta_fields_addition, api_action=CrudApiAction.RETRIEVE),
             partial(api_action_init, api_action=StatusyApiAction.TRANSIT),

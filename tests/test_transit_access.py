@@ -14,8 +14,9 @@
 
 """
 The transit is an action of bazis-permit: closed to anonymous users (403) even with a
-transit permission of the roles for anonymous users, unless a route overrides it with
-`public=True` (sample `ParentEntityGuestRouteSet`); `schema_transit` is a schema route.
+transit permission of the roles for anonymous users, unless a route declares it again with
+`public=True` (`route_declare`, sample `ParentEntityGuestRouteSet`); `schema_transit` is a
+schema route.
 """
 
 from django.core.cache import cache
@@ -89,6 +90,6 @@ def test_openapi(sample_app):
     schema = paths['/api/v1/entity/parent_entity/{item_id}/schema_transit/']['get'][OPENAPI_EXTENSION]
     assert schema['kind'] == 'schema'
     transit = paths['/api/v1/entity/parent_entity/{item_id}/transit/']['post'][OPENAPI_EXTENSION]
-    assert transit['kind'] == 'other' and 'public' not in transit
+    assert (transit['kind'], transit['public']) == ('other', False)
     guest = paths['/api/v1/entity/parent_entity_guest/{item_id}/transit/']['post'][OPENAPI_EXTENSION]
     assert guest['public'] is True

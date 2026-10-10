@@ -111,7 +111,7 @@ text = "the initial status of a model is Workflow(initial=...) of its workflow.p
 check = "statusy.E001"
 
 [[pitfalls]]
-text = "the transit is an action of bazis-permit: an anonymous user gets 403 even with a transit permission of a role for anonymous users; a transit for anonymous users is a route of its own overriding action_transit with public=True (limited by BAZIS_THROTTLE_PUBLIC), never a check in a validator"
+text = "the transit is an action of bazis-permit: an anonymous user gets 403 even with a transit permission of a role for anonymous users; a transit for anonymous users is a route of its own with action_transit = route_declare(StatusyRouteSetBase.action_transit, public=True) (limited by BAZIS_THROTTLE_PUBLIC), never a check in a validator"
 
 [[pitfalls]]
 text = "the declared workflows reach the database only by migrate (or flush): after a change of workflow.py run migrate; `manage.py bazis_doctor` (bazis 2.13; `manage.py check --database default` with an older core) lists the differences"

@@ -80,20 +80,20 @@ class OrderRouteSet(StatusyRouteSetBase):
   the transit or it does not start from the current status (from bazis-permit 2.8.0, 404
   for an item the user cannot view, as for a missing one); 400 without a required
   payload; 422 with the errors of the payload and the validators. An action of bazis-permit
-  (kind `other`): an anonymous user gets 403 even with a transit permission of a role for
-  anonymous users (bazis-statusy 2.12), unless the route overrides it with `public=True`
-  (below).
+  declared `public=False` (bazis-statusy 2.12): authenticated users only, an anonymous user
+  gets 403 even with a transit permission of a role for anonymous users, unless a route
+  declares it again with `public=True` (below).
 - `GET /{item_id}/schema_transit/`: the schema the object must satisfy before a transit with
   `is_schema_validate` (default true); kind `schema` in `x-bazis` (bazis-statusy 2.12).
 - A transit for anonymous users (a guest request, a public form): a route of its own that
-  overrides `action_transit` with `public=True` (limited by `BAZIS_THROTTLE_PUBLIC` per IP
-  address, or a `throttle` of its own); the transit permissions of the roles for anonymous
-  users (`Role(for_anonymous=True)`, selector `all`) still decide which transits they make,
-  and the transit has no author:
+  declares the transit again with `public=True` (`route_declare` of the core; limited by
+  `BAZIS_THROTTLE_PUBLIC` per user or IP address, or by
+  `route_declare(..., public=True, dependencies=[throttle(...)])`); the transit permissions
+  of the roles for anonymous users (`Role(for_anonymous=True)`, selector `all`) still
+  decide which transits they make, and the transit has no author:
 
   ```python
-  from bazis.contrib.statusy.schemas import TransitRequestSchema
-  from bazis.core.routes_abstract.initial import http_post
+  from bazis.core.routes_abstract.initial import route_declare
 
   class RequestGuestRouteSet(StatusyRouteSetBase):
       model = apps.get_model('service.Request')
@@ -103,10 +103,7 @@ class OrderRouteSet(StatusyRouteSetBase):
       def get_url_prefix(cls) -> str:
           return '/service/request_guest'
 
-      @http_post('/{item_id}/transit/', public=True,
-                 endpoint_callbacks=StatusyRouteSetBase.action_transit.endpoint_callbacks)
-      def action_transit(self, item_id: str, data: TransitRequestSchema, **kwargs):
-          return StatusyRouteSetBase.action_transit.func(self, item_id, data, **kwargs)
+      action_transit = route_declare(StatusyRouteSetBase.action_transit, public=True)
   ```
 
   Declare `default_route = True` on the main route of the model (a second route set of a

@@ -25,9 +25,13 @@ from django.test.utils import CaptureQueriesContext
 from django.utils.translation import gettext_lazy as _
 
 import pytest
+from bazis_test_utils.utils import get_api_client
 from entity.models import ChildEntity, ParentEntity
+from translated_fields import to_attribute
 
 from bazis.contrib.permit.declare import Group
+from bazis.contrib.permit.models import GroupPermission, Permission
+from bazis.contrib.permit.models import Role as RoleModel
 from bazis.contrib.statusy import declare
 from bazis.contrib.statusy.checks import check_declarations, check_declarations_applied
 from bazis.contrib.statusy.declare import (
@@ -41,6 +45,7 @@ from bazis.contrib.statusy.declare import (
 from bazis.contrib.statusy.models import Status as StatusModel
 from bazis.contrib.statusy.models import StatusyContentType
 from bazis.contrib.statusy.models import Transit as TransitModel
+from bazis.contrib.users import get_user_model
 
 from tests.factories import ParentEntityFactory
 
@@ -273,6 +278,36 @@ def test_initial_status_of_a_workflow(settings):
     assert ParentEntity.objects.get(pk=item.pk).status_id == 'decl_done'
     # a model whose workflow declares none keeps the global default
     assert ParentEntity.status.field.get_default() == settings.BAZIS_STATUS_INITIAL[0]
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures('declared_initial')
+def test_initial_status_through_the_api(sample_app):
+    """A create of the API without a status gets the initial status of the workflow."""
+    name = to_attribute('name')
+    group = GroupPermission.objects.create(slug='decl_creator', **{name: 'Creator'})
+    for slug in ('entity.parent_entity.item.add.all.all', 'entity.parent_entity.item.view.all.all'):
+        group.permissions.add(Permission.objects.get_or_create(slug=slug)[0])
+    role = RoleModel.objects.create(slug='decl_creator', **{name: 'Creator'})
+    role.groups_permission.add(group)
+    user = get_user_model().objects.create_user('creator', email='creator@site.com', password='x')
+    user.roles.add(role)
+
+    response = get_api_client(sample_app, user.jwt_build()).post(
+        '/api/v1/entity/parent_entity/',
+        json_data={
+            'data': {
+                'type': 'entity.parent_entity',
+                'bs:action': 'add',
+                'attributes': {
+                    'name': 'Declared', 'description': 'd', 'is_active': False, 'price': '1.00',
+                },
+            },
+        },
+    )
+    assert response.status_code == 201, response.content
+    assert response.json()['data']['relationships']['status']['data']['id'] == 'decl_review'
+    assert ParentEntity.objects.get(name='Declared').status_id == 'decl_review'
 
 
 def test_initial_status_normalized():
