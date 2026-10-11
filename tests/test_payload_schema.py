@@ -13,7 +13,8 @@
 # limitations under the License.
 
 """
-The JSON schemas of the payload of a transit: the lazy titles of its fields
+The payload type of a transit strips its texts before their constraints are checked. The JSON
+schemas of the payload of a transit: the lazy titles of its fields
 (`Field(title=_('...'))`) are strings of the language active when a schema is generated (the
 contract of bazis-front, the `state_actions` of a request), as the titles of the schemas of
 the core are: the payload type and the body of the transit endpoint are
@@ -23,10 +24,12 @@ the core are: the payload type and the body of the transit endpoint are
 import json
 import warnings
 
+from django.contrib.contenttypes.models import ContentType
 from django.utils import translation
 
-from pydantic import create_model
+from pydantic import BaseModel, Field, create_model
 
+import pytest
 from entity.models import ParentEntity
 
 from bazis.contrib.statusy.models import Transit
@@ -34,7 +37,9 @@ from bazis.contrib.statusy.schemas import (
     StateActionEndpointSchema,
     TransitActionEndpointBodySchema,
     TransitActionSchema,
+    payload_validate_none,
 )
+from bazis.core.errors import JsonApiBazisException
 from bazis.core.utils.schemas import TranslatedSchemaModel
 
 
@@ -105,3 +110,40 @@ def test_transit_action_schema_no_deprecation_warning():
             resource={'id': '1', 'type': 'entity.parent_entity'},
         )
     assert action.code == 'ACTION_TRANSIT'
+
+
+class ReasonPayload(BaseModel):
+    reason: str = Field(title='Reason', min_length=1, max_length=20)
+
+
+@pytest.mark.django_db
+def test_required_text_of_the_payload_is_stripped(monkeypatch):
+    """
+    The payload type strips its texts before their length is checked: a reason of only
+    spaces is refused at its field, the methods receive the stripped text.
+    """
+    received = []
+
+    def validator_reason(self, transit, user, payload: ReasonPayload):
+        if payload is not payload_validate_none:
+            received.append(payload.reason)
+
+    monkeypatch.setattr(ParentEntity, 'validator_reason', validator_reason, raising=False)
+    transit = Transit(
+        id='reject',
+        model=ContentType.objects.get_for_model(ParentEntity),
+        validators=['validator_reason'],
+    )
+    item = ParentEntity()
+
+    for blank in ('', '   ', '\t\n '):
+        with pytest.raises(JsonApiBazisException) as raised:
+            item.transit_validation(transit, None, {'reason': blank})
+        assert raised.value.status == 422
+        (error,) = raised.value.errors
+        assert error.loc == ('payload', 'reason')
+    assert received == []
+
+    item.transit_validation(transit, None, {'reason': '  too late  '})
+    item.transit_validation(transit, None, ReasonPayload(reason=' x '))
+    assert received == ['too late', 'x']

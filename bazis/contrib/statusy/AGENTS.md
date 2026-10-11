@@ -158,6 +158,13 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
   same object. A `payload` without an annotation adds nothing; a transit whose methods have
   no annotated `payload` has no payload type, the methods receive None. A model with a
   classmethod `schema_build(transit)` returns the model to use for each transit.
+- **A required text of the payload** (a reason of a rejection): `reason: str =
+  Field(title=_('Reason'), min_length=1, max_length=2000)`. The payload type strips the
+  texts of its fields before their length is checked (bazis-statusy 2.12): a reason of
+  only spaces is refused (422 at `/payload/reason`) and the methods receive the stripped
+  text; do not strip it again in an action. A model nested in the payload keeps its own
+  configuration (`model_config = ConfigDict(str_strip_whitespace=True)` to strip its
+  texts). Test the transit with a text of only spaces.
 - **The titles of the payload fields**: `Field(title=_('Reason'))` with `gettext_lazy`,
   kept lazy: the JSON schemas of the payload (the body of the transit in `state_actions`,
   the contract of bazis-front) are generated in the language of the request (of the export)
