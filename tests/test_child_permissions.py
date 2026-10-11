@@ -221,6 +221,36 @@ def test_transit_validates_the_children(sample_app, to_check):
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    ('restricts', 'status_code'),
+    [
+        # the field's own `required` keeps it although `__all__` disables it: validated
+        (('__all__.disable', 'dependent_price.required|notnull'), 422),
+        # `required` of `__all__` does not keep a field disabled by its own restriction
+        (('__all__.required', 'dependent_price.notnull|disable'), 200),
+    ],
+)
+def test_transit_validates_a_required_field_of_a_hidden_child(sample_app, to_check, restricts, status_code):
+    """
+    The transit schema of a child keeps a field its own permission declares `required`
+    (bazis 2.16 as before), whatever `__all__.disable`; a field it disables is not
+    validated, whatever `__all__.required`.
+    """
+    slugs = [f'entity.dependent_entity.field.transit.all.all.{it}' for it in restricts]
+    user = user_with('transiting_required', *TRANSITING, *slugs)
+    parent = ParentEntityFactory()
+    DependentEntityFactory(parent_entity=parent, dependent_price=None)
+
+    response = get_api_client(sample_app, user.jwt_build()).post(
+        f'{URL_PARENT}{parent.id}/transit/', json_data={'transit': to_check.id}
+    )
+    assert response.status_code == status_code, response.text
+    if status_code == 422:
+        [error] = response.json()['errors']
+        assert error['source']['pointer'].endswith('/dependent_price')
+
+
+@pytest.mark.django_db(transaction=True)
 def test_invalid_children_the_user_does_not_view(sample_app, to_check):
     """
     A child the user does not view is validated too, but its errors do not disclose it:
