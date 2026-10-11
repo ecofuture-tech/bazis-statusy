@@ -21,7 +21,7 @@ use_when = "a model with a status and transitions"
 [[extension_points]]
 name = "StatusyMixin.status_history"
 import = "bazis.contrib.statusy.models_abstract.StatusyMixin"
-use_when = "show the history of the transits of an item in the API: include={'status_history': None} in the fields of its route (transit, status, dt, author; visible with the item)"
+use_when = "show the history of the transits of an item in the API: include={'status_history': None}"
 
 [[extension_points]]
 name = "StatusyChildMixin"
@@ -63,6 +63,11 @@ name = "StatusyAdminMixin"
 import = "bazis.contrib.statusy.admin_abstract.StatusyAdminMixin"
 use_when = "the admin of a StatusyMixin model: read-only status fields and the transit history"
 
+[[extension_points]]
+name = "Workflow"
+import = "bazis.contrib.statusy.declare.Workflow"
+use_when = "the statuses and transits of a model declared in the WORKFLOWS of <app>/workflow.py, applied by migrate; initial= the status of its new objects"
+
 [[pitfalls]]
 text = "the CREATE schema accepts an initial `status`: restrict it with `add` permissions by status, or exclude it"
 
@@ -71,33 +76,28 @@ text = "a route of a StatusyMixin model that does not inherit StatusyRouteSetBas
 check = "statusy.W001"
 
 [[pitfalls]]
-text = "validators are also called with payload_validate_none (to build state_actions)"
+text = "validators are also called with payload_validate_none (to build state_actions): return before reading the payload"
 
 [[pitfalls]]
-text = "a transit of the parent validates its StatusyChildMixin children with the transit schema of their route (the field permissions of the user for transit on the child model); it needs only the transit permission of the parent, no item.transit permission of the children (since 2.10.0); invalid children the user does not view answer one ERR_TRANSIT_CHILDREN_INVALID (422) that names none of them"
+text = "a transit of the parent validates its StatusyChildMixin children; it needs only the transit permission of the parent"
 
 [[pitfalls]]
-text = "the payload of a transit is one object with the fields of the pydantic models annotated as `payload` of all its validators and actions (item.transit_payload_type(transit)); a method without an annotated payload adds none"
+text = "the payload of a transit is one object with the fields of the payload models of all its validators and actions"
 
 [[pitfalls]]
-text = "titles of payload fields: Field(title=gettext_lazy(...)), kept lazy (the schemas are generated in the language of the request); str() would fix the language of the process start"
+text = "titles of payload fields stay lazy: Field(title=gettext_lazy(...)), never str()"
 
 [[pitfalls]]
-text = "transit_apply() in code does not check the permissions of the user; a transit of another model or that does not start from the current status of the item fails with ERR_TRANSIT (400): take the transit with item.get_transit(id) (None unless it starts from the current status)"
+text = "transit_apply() in code checks no permissions and makes only a transit from the current status: take it with item.get_transit(id)"
 
 [[pitfalls]]
-text = "the user of transit_apply(transit, user) is the author of the history record and status_author: a transit the system makes (an automatic confirmation) passes None, not the user of the request"
+text = "a transit the system makes passes user None to transit_apply, not the user of the request"
 
 [[pitfalls]]
-text = "a transit in hook_after_create runs its validators before validate_item of the create: call `with defer_validate_item() as scope: scope.validate()` first so that an invalid item answers with the errors of its fields (the item is then validated twice: as create, then as transit)"
-
-[[extension_points]]
-name = "Workflow"
-import = "bazis.contrib.statusy.declare.Workflow"
-use_when = "the statuses and transits of a model declared in the WORKFLOWS of <app>/workflow.py, applied by migrate; initial= the status of its new objects"
+text = "a transit in hook_after_create runs its validators before validate_item: validate the new item first with defer_validate_item"
 
 [[pitfalls]]
-text = "a declared workflow names a StatusyMixin model, its transits go between its statuses, a transit id is unique among the models and a status has one name in all the workflows; an invalid declaration stops migrate"
+text = "an invalid declaration of workflow.py stops migrate (a StatusyMixin model, transits between its statuses, unique transit ids, one name per status, an initial status of the workflow)"
 check = "statusy.E001"
 
 [[pitfalls]]
@@ -105,30 +105,30 @@ text = "the validators and actions of a declared transit are methods of the mode
 check = "statusy.E002"
 
 [[pitfalls]]
-text = "a permission of roles.py on a model with a declared workflow names one of its statuses (or all), and a transit permission (`<app>.<model>.item.transit.<selector>.<status>.<transit>`) a declared transit of the model and its source status (or all)"
+text = "a permission of roles.py on a model with a declared workflow names its statuses and declared transits"
 check = "statusy.E003"
 
 [[pitfalls]]
-text = "the names of declared statuses and transits are English gettext_lazy msgids: translate them in the catalogs of the project (`manage.py bazis_messages status` lists the untranslated ones)"
+text = "the names of declared statuses and transits are English gettext_lazy msgids translated by the catalogs of the project"
 
 [[pitfalls]]
-text = "the initial status of a model is Workflow(initial=...) of its workflow.py, not a global BS_BAZIS_STATUS_INITIAL shared by every model; an initial status outside the statuses of the workflow is an error"
+text = "the initial status of a model is Workflow(initial=...), not the global BS_BAZIS_STATUS_INITIAL"
 check = "statusy.E001"
 
 [[pitfalls]]
-text = "the transit is an action of bazis-permit: an anonymous user gets 403 even with a transit permission of a role for anonymous users; a transit for anonymous users is a route of its own with action_transit = route_declare(StatusyRouteSetBase.action_transit, public=True) (limited by BAZIS_THROTTLE_PUBLIC), never a check in a validator"
+text = "anonymous users get 403 on the transit endpoint: a transit for them is a route of its own with route_declare(..., public=True)"
 
 [[pitfalls]]
-text = "the declared workflows reach the database only by migrate (or flush): after a change of workflow.py run migrate; `manage.py bazis_doctor` (bazis 2.13; `manage.py check --database default` with an older core) lists the differences"
+text = "the declared workflows reach the database only by migrate"
 check = "statusy.W003"
 
 [[pitfalls]]
-text = "a transit removed from workflow.py is kept (its history references it, deleting it deletes the history): delete it in the admin if it must go"
+text = "a transit removed from workflow.py is kept (its history references it)"
 check = "statusy.W004"
 
 [[pitfalls]]
-text = "the id of a transit is unique among all the models: a declared transit id that is a transit of another model in the database stops migrate"
+text = "a declared transit id that is a transit of another model stops migrate"
 check = "statusy.E004"
 
 [[pitfalls]]
-text = "a data migration runs before the declarations are applied (after the last migration): on a fresh database it cannot rely on the declared statuses or transits"
+text = "on a fresh database a data migration cannot rely on the declared statuses or transits"
