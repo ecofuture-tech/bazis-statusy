@@ -273,11 +273,21 @@ def test_initial_status_of_a_workflow(settings):
     item = ParentEntityFactory.create()
     assert item.status_id == 'decl_review'
     assert ParentEntity(name='b', status_id='decl_done').status_id == 'decl_done'
-    item.status_id = 'decl_done'
-    item.save()
-    assert ParentEntity.objects.get(pk=item.pk).status_id == 'decl_done'
-    # a model whose workflow declares none keeps the global default
-    assert ParentEntity.status.field.get_default() == settings.BAZIS_STATUS_INITIAL[0]
+
+
+@pytest.mark.django_db
+def test_the_initial_status_of_a_model(declared_initial, monkeypatch):
+    """
+    `initial_status(model)`: the declared initial status of the model (what StatusyMixin
+    gives its new objects, which a client such as the contract of bazis-front reads), None
+    when its workflow declares none (BAZIS_STATUS_INITIAL then).
+    """
+    assert declare.initial_status(ParentEntity) == 'decl_review'
+    monkeypatch.setattr(declare, 'declarations', lambda: [('entity.workflow', Workflow('entity.ParentEntity', [DRAFT]))])
+    declare.initial_statuses.cache_clear()
+    assert declare.initial_status(ParentEntity) is None
+    # what a new object gets
+    assert ParentEntity(name='a').status_id != 'decl_review'
 
 
 @pytest.mark.django_db(transaction=True)

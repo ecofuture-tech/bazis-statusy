@@ -399,10 +399,9 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         # a new object without a status (not one loaded from the database, which passes
         # its values by position) gets the initial status its workflow declares
         if not args and 'status' not in kwargs and 'status_id' not in kwargs:
-            from .declare import initial_statuses
+            from .declare import initial_status
 
-            initial = initial_statuses()
-            initial = initial.get(self._meta.label) or initial.get(self._meta.concrete_model._meta.label)
+            initial = initial_status(type(self))
             if initial is not None:
                 kwargs['status_id'] = initial
         super().__init__(*args, **kwargs)

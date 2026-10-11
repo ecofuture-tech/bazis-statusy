@@ -134,6 +134,16 @@ def initial_statuses() -> dict[str, str]:
     }
 
 
+def initial_status(model) -> str | None:
+    """
+    The id of the initial status that the workflow of a model declares (`Workflow.initial`,
+    that of its concrete model for a proxy), the status of its new objects; None when it
+    declares none: `BAZIS_STATUS_INITIAL` then.
+    """
+    declared = initial_statuses()
+    return declared.get(model._meta.label) or declared.get(model._meta.concrete_model._meta.label)
+
+
 def _model(label: str):
     try:
         return apps.get_model(label)

@@ -296,7 +296,8 @@ WORKFLOWS = [
   object or an explicit `status` is kept), instead of the global `BAZIS_STATUS_INITIAL`
   (bazis-statusy 2.12). The admin form of a new object still starts with the global
   default: pick the status there. An initial status that is not a status of the workflow
-  is `statusy.E001`.
+  is `statusy.E001`. `initial_status(Model)` of `bazis.contrib.statusy.declare` reads it
+  (None without one), as the contract of bazis-front does.
 
 - `migrate` applies them (`post_migrate`, also sent by `flush`) once all the migrations
   of the project are applied, in one transaction; applied again it writes nothing. The
