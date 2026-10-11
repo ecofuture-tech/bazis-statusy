@@ -45,10 +45,10 @@ class ParentEntityRouteSet(StatusyRouteSetBase):
     # the restrictions of the parent entities for the other routes
     default_route = True
 
-    # add fields (extended_entity, dependent_entities) to schema
+    # add fields (extended_entity, dependent_entities) and the history of the transits
     fields = {
         None: SchemaFields(
-            include={'extended_entity': None, 'dependent_entities': None},
+            include={'extended_entity': None, 'dependent_entities': None, 'status_history': None},
         ),
     }
 

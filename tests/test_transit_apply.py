@@ -99,3 +99,37 @@ def test_transit_of_another_model_fails(transits):
     entity = ParentEntity.objects.get(pk=entity.pk)
     assert entity.status_id == 'draft'
     assert not entity.statusy_transits.exists()
+
+
+def test_payload_as_a_dict_or_a_model_instance(transits):
+    """
+    The payload of `transit_apply` is the dict of the body of the transit endpoint or an
+    instance of a payload model, validated as its data with the payload type of the transit
+    (a model inheriting the payload models of all its methods): an instance of one of them
+    lacks the fields of the others (422).
+    """
+    from entity.schemas import ParentEntityBeforeSchema, ParentEntityValidatedSchema
+
+    approved = datetime(2026, 2, 1, tzinfo=UTC)
+    activate = transits['activate']
+    activate.actions_before = ['before_dt_approved']
+    activate.save()
+
+    entity = ParentEntity.objects.create(name='Entity')
+    entity = entity.transit_apply(activate, None, ParentEntityBeforeSchema(dt_approved=approved))
+    assert (entity.status_id, entity.dt_approved) == ('active', approved)
+
+    entity = entity.transit_apply(transits['back'], None)
+    entity = entity.transit_apply(activate, None, {'dt_approved': approved.isoformat()})
+    assert entity.status_id == 'active'
+
+    entity = entity.transit_apply(transits['back'], None)
+    activate.validators = ['validator_must_active']
+    activate.save()
+    with pytest.raises(JsonApiBazisException) as e:
+        entity.transit_apply(activate, None, ParentEntityValidatedSchema(must_active=True))
+    assert e.value.status == 422
+    assert [err.loc for err in e.value.errors] == [('payload', 'dt_approved')]
+
+    payload = entity.transit_payload_type(activate)(must_active=True, dt_approved=approved)
+    assert entity.transit_apply(activate, None, payload).status_id == 'active'

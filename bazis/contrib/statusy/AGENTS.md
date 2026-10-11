@@ -193,10 +193,23 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
   `state_actions`): check it before reading the payload.
 - Decorated methods are defined directly in a model class (or its mixin); `Transit` lists
   their method names. A transit runs in a transaction.
-- A child object whose status is the parent's: `StatusyChildMixin` with
-  `get_status_field()` returning the path (`'order__status_id'`); list its route in
-  `routes_child` of the parent route to validate the children with it on a transit
-  (else the default route of the child model). `StatusyChildMixin` is a
+- A child object whose status is the parent's: `StatusyChildMixin` with the
+  classmethod `get_status_field()` returning the path to the status of the parent; list
+  its route in `routes_child` of the parent route to validate the children with it on a
+  transit (else the default route of the child model):
+
+  ```python
+  class OrderItem(StatusyChildMixin, DtMixin, UuidMixin, JsonApiMixin):
+      order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+
+      @classmethod                 # a classmethod: read on the class when the models load
+      def get_status_field(cls):
+          return 'order__status_id'
+
+  class OrderItemRouteSet(StatusySimpleRouteSetBase):
+      model = apps.get_model('shop.OrderItem')
+  ```
+ `StatusyChildMixin` is a
   `PermitModelMixin` (as `StatusyMixin`): its objects are restricted by the permissions
   of the user, with selectors (`author`) and the status of the parent
   (`entity.order_item.item.view.author.draft`), on its route and through the relations
@@ -222,8 +235,8 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
   the route. Keep the invariants of the item there (a validator of a transit checks only
   that transit).
 - `item.transit_apply(transit, user, payload)` in code validates but does not check
-  permissions; `@transit_link` returns it bound to the transit whose `source_link` is the
-  method.
+  permissions (the payload: see Transits in code); `@transit_link` returns it bound to the
+  transit whose `source_link` is the method.
 
 ## Transits in code and the history
 
@@ -233,7 +246,14 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
 - `item.transit_apply(transit, user, payload=None)` makes only a transit of the model of
   the item (its content type) that starts from the current status of the item, a transit
   `get_transit` gives: another one fails with 400 `ERR_TRANSIT`
-  (`JsonApiBazisException`) before its validators, nothing written. It runs the
+  (`JsonApiBazisException`) before its validators, nothing written.
+  `payload` is the dict of the body of the transit endpoint (`{'dt_closed': '2026-...'}`)
+  or an instance of a payload model (`ClosePayload(dt_closed=...)`, bazis-statusy 2.12),
+  validated as its data with the payload type of the transit: a transit whose methods
+  annotate several payload models takes the fields of all of them, so pass the dict, or
+  an instance of `item.transit_payload_type(transit)`; missing fields are 422
+  (`JsonApiBazisException`), as on the endpoint. The methods receive the instance of the
+  payload type, not the object passed. It runs the
   validators (with `user`), writes the history record, runs the actions before, sets
   `status`, `status_dt`, `status_author`, runs the actions after and returns the item
   read again. It checks
@@ -270,6 +290,28 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
   record per transit with `transit`, `status` (the new one), `dt`, `author` and `extra`
   (JSON, `{}`); order it by `dt`. `StatusyAdminMixin` shows it in the admin. A status
   written without a transit (`QuerySet.update(status=...)` in test data) has no record.
+
+### The history in the API: `status_history`
+
+The history model is not a JSON:API resource and has no route. `StatusyMixin` has the
+calculated field `status_history` (bazis-statusy 2.12): the transits of the item, the
+oldest first, each `{"transit": "<transit id>", "status": "<status id>", "dt": "<ISO
+time>", "author": "<user id>" | null}` (null for a transit of the system). A route shows it
+with `include` (fetched in the query of the route, one subquery, for a list too):
+
+```python
+class OrderRouteSet(StatusyRouteSetBase):
+    model = apps.get_model('shop.Order')
+    fields = {None: SchemaFields(include={'status_history': None})}
+```
+
+It is a read-only field of the item: whoever views the item reads its history (the
+`view` permissions by status and selector), nobody else; a field permission hides it
+(`shop.order.field.view.all.all.status_history.disable`). A client names the transits
+and statuses by their ids (the read-only routes `statusy/transit/` and `statusy/status/`
+under the prefix of the API router, registered with `bazis.contrib.statusy.router`) and the authors by the users it may read. A history with
+other data (the `extra` of the records, the names of the authors) is a `calc_property` of
+the model of its own over `statusy_transits` (see the guide of the core).
 
 ## Workflows in the code (`workflow.py`)
 

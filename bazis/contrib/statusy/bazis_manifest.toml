@@ -19,6 +19,11 @@ import = "bazis.contrib.statusy.models_abstract.StatusyMixin"
 use_when = "a model with a status and transitions"
 
 [[extension_points]]
+name = "StatusyMixin.status_history"
+import = "bazis.contrib.statusy.models_abstract.StatusyMixin"
+use_when = "show the history of the transits of an item in the API: include={'status_history': None} in the fields of its route (transit, status, dt, author; visible with the item)"
+
+[[extension_points]]
 name = "StatusyChildMixin"
 import = "bazis.contrib.statusy.models_abstract.StatusyChildMixin"
 use_when = "a model whose status is the status of its parent (get_status_field)"

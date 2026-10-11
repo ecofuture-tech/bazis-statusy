@@ -44,11 +44,11 @@ from bazis.core.item_validation import defer_validate_item
 from bazis.core.models_abstract import InitialBase, JsonApiMixin, logger
 from bazis.core.schemas import CrudAccessAction
 from bazis.core.utils.functools import get_func_sig_param
-from bazis.core.utils.orm import AbstractForeignKey
+from bazis.core.utils.orm import AbstractForeignKey, FieldDynamic, calc_property
 from bazis.core.utils.schemas import TranslatedSchemaModel
 
 from . import TransitChildrenError, TransitError
-from .schemas import StatusyApiAction, payload_validate_none
+from .schemas import StatusHistoryEntry, StatusyApiAction, payload_validate_none
 
 
 if TYPE_CHECKING:
@@ -406,6 +406,22 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
                 kwargs['status_id'] = initial
         super().__init__(*args, **kwargs)
 
+    @calc_property(
+        [
+            FieldDynamic(
+                source='statusy_transits',
+                fields=['transit', 'status', 'dt', 'author'],
+                order_by=['dt', 'pk'],
+            )
+        ]
+    )
+    def status_history(self) -> list[StatusHistoryEntry]:
+        """
+        The transits of the item, the oldest first (its history records,
+        `statusy_transits`), fetched with the item by the routes that include the field.
+        """
+        return self._statusy_transits
+
     @cached_property
     def statusy_children_items(self) -> list[JsonApiMixin]:
         for child_model, field_path in self._statusy_children_models_dict.items():
@@ -518,17 +534,25 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
                 status=HTTP_422_UNPROCESSABLE_CONTENT,
             )
 
-    def transit_validation(self, transit: TransitBase, user, payload: dict | None) -> Any: # noqa: C901
+    def transit_validation(  # noqa: C901
+        self, transit: TransitBase, user, payload: dict | BaseModel | None
+    ) -> Any:
         """
         Checks whether the transition is allowed. If any errors are found, an exception will be raised with their list.
 
         :param transit: bazis.contrib.statusy.models.Transit
         :param user: current user object (AUTH_USER_MODEL or None)
-        :param payload: transition data dictionary or None
+        :param payload: transition data: a dictionary, an instance of a payload model (its
+            fields are validated as the dictionary of its data) or None
         :return: Payload object created from the passed payload dictionary
         """
         payload_obj = None
         errors = []
+
+        # an instance of a payload model is validated as its data: the payload type of the
+        # transit is a model of its own, inheriting the models of all its methods
+        if isinstance(payload, BaseModel):
+            payload = payload.model_dump(by_alias=True)
 
         # check for dependent transitions
         # get the list of child transitions
@@ -599,7 +623,7 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         return payload_obj
 
     def transit_apply(
-        self, transit: TransitBase, user=None, payload: dict = None
+        self, transit: TransitBase, user=None, payload: dict | BaseModel | None = None
     ) -> 'StatusyMixin':
         """
         Executes the transition:
@@ -625,7 +649,9 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
 
         :param transit: Transition object.
         :param user: User performing the transition.
-        :param payload: Dictionary of additional transition data. Will be processed in a custom class.
+        :param payload: The data of the transition: a dictionary (as the body of the transit
+            endpoint) or an instance of a payload model, validated with the payload type of
+            the transit.
         :return: Returns the object to which the transition was applied after all pre-processing.
         """
         content_type = apps.get_model('statusy.StatusyContentType').objects.get_for_model(

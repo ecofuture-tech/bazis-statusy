@@ -944,6 +944,10 @@ Model for storing transition history:
 - Author and transition time
 - Additional data (extra)
 
+The API shows the history of an item with the calculated field `status_history` of
+`StatusyMixin` (`fields = {None: SchemaFields(include={'status_history': None})}` in the
+route): a list of `{transit, status, dt, author}`, the oldest first, visible with the item.
+
 ### Transition Lifecycle
 
 1. **Initiation**: Request to execute transition via API

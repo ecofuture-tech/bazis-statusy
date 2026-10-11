@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import datetime
 from typing import Any, Literal, TypeVar, get_origin
 
 from django.utils.functional import cached_property
@@ -56,6 +57,18 @@ class StatusyApiAction(ApiAction):
 class TransitRequestSchema(BaseModel):
     transit: str
     payload: Any | None = None
+
+
+class StatusHistoryEntry(BaseModel):
+    """
+    A transit of the history of an item (`StatusyMixin.status_history`): the transit, the
+    status it set, its time and the id of its author (None for a system transit).
+    """
+
+    transit: str
+    status: str
+    dt: datetime
+    author: str | int | None = None
 
 
 class StateActionEndpointSchema(BaseModel):
