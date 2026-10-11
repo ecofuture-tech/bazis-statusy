@@ -116,3 +116,50 @@ def test_field_hidden_in_one_status(sample_app, entities):
     assert_invalid(client.get(URL, params={'filter': 'price__lt=10'}), '/query/filter')
     assert_invalid(client.get(URL, params={'sort': 'price'}), '/query/sort')
     assert ids(client.get(URL, params={'filter': 'name=Draft'})) == [str(draft.id)]
+
+
+def schema_list_members(client) -> list[set[str]]:
+    """The fields (attributes and relationships) of each member of `schema_list`, in order."""
+    response = client.get(f'{URL}schema_list/')
+    assert response.status_code == 200, response.content
+    schema = response.json()
+    defs = schema['$defs']
+
+    def resolve(it):
+        return defs[it['$ref'].split('/')[-1]] if '$ref' in it else it
+
+    items = schema['properties']['data']['items']
+    members = []
+    for member in items.get('anyOf', [items]):
+        properties = resolve(member)['properties']
+        members.append(
+            set(resolve(properties['attributes']).get('properties', {}))
+            | set(resolve(properties['relationships']).get('properties', {}))
+        )
+    return members
+
+
+@pytest.mark.django_db(transaction=True)
+def test_anonymous_schema_list_names_the_fields_shown(sample_app, entities):
+    """
+    The schema of the list of a role for anonymous users that views the open objects and
+    shows their name: every member, the union of the columns too, has the name alone; the
+    combination without the field group of the open status (every field) is matched by no
+    object it views (bazis-permit 2.11). Viewing the drafts as well brings it back.
+    """
+    role = role_with(
+        'career_list',
+        'entity.parent_entity.item.view.all.open',
+        'entity.parent_entity.field.view.all.open.__all__.disable',
+        'entity.parent_entity.field.view.all.open.name.enable',
+        for_anonymous=True,
+    )
+    client = get_api_client(sample_app)
+    members = schema_list_members(client)
+    assert members and all(it == {'name'} for it in members)
+
+    role.groups_permission.first().permissions.add(
+        Permission.objects.get_or_create(slug='entity.parent_entity.item.view.all.draft')[0]
+    )
+    first, *__ = schema_list_members(client)
+    assert {'name', 'price'} <= first
