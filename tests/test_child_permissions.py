@@ -228,13 +228,15 @@ def test_transit_validates_the_children(sample_app, to_check):
         (('__all__.disable', 'dependent_price.required|notnull'), 422),
         # `required` of `__all__` does not keep a field disabled by its own restriction
         (('__all__.required', 'dependent_price.notnull|disable'), 200),
+        # its own `disable` wins over its own `required`: not validated
+        (('__all__.disable', 'dependent_price.required|notnull|disable'), 200),
     ],
 )
 def test_transit_validates_a_required_field_of_a_hidden_child(sample_app, to_check, restricts, status_code):
     """
     The transit schema of a child keeps a field its own permission declares `required`
-    (bazis 2.16 as before), whatever `__all__.disable`; a field it disables is not
-    validated, whatever `__all__.required`.
+    (bazis 2.16 as before), whatever `__all__.disable`; a field its own permission disables
+    is not validated, whatever `required` (its own or of `__all__`).
     """
     slugs = [f'entity.dependent_entity.field.transit.all.all.{it}' for it in restricts]
     user = user_with('transiting_required', *TRANSITING, *slugs)
