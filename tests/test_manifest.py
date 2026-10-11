@@ -60,18 +60,47 @@ def test_routes_without_transits(sample_app, monkeypatch):
     ]
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_catalog_routes_are_public(sample_app):
     """
     The routes of `bazis.contrib.statusy.router` (registered by the sample) are a public
-    catalog: `permit.W002` does not report them, an anonymous user reads them.
+    catalog: `permit.W002` does not report them, an anonymous user reads them, and a transit
+    shows its names, hints, model and statuses, not how it runs (its methods, its link in
+    the code, its validation, its related transits).
     """
     from bazis_test_utils.utils import get_api_client
+    from entity.models import ParentEntity
+    from translated_fields import to_attribute
 
     from bazis.contrib.permit.checks import check_routes_permit
+    from bazis.contrib.statusy.models import Status, StatusyContentType, Transit
 
     warnings = {it.obj.__qualname__ for it in check_routes_permit(None)}
     assert not warnings & {'StatusRoute', 'TransitRoute'}
+
+    name = to_attribute('name')
+    StatusyContentType.objects.clear_cache()
+    draft = Status.objects.get_or_create(id='draft', defaults={name: 'Draft'})[0]
+    check = Status.objects.get_or_create(id='check', defaults={name: 'Check'})[0]
+    Transit.objects.create(
+        id='catalog_check',
+        model=StatusyContentType.objects.get_for_model(ParentEntity),
+        status_src=draft,
+        status_dst=check,
+        validators=['secret_validator'],
+        actions_before=['secret_before'],
+        source_link='entity.workflow',
+        hint_action='Check it',
+        **{name: 'To check'},
+    )
     client = get_api_client(sample_app)
-    for url in ('/api/v1/statusy/status/', '/api/v1/statusy/transit/'):
-        assert client.get(url).status_code == 200, url
+    response = client.get('/api/v1/statusy/status/draft/')
+    assert response.status_code == 200, response.content
+    assert set(response.json()['data']['attributes']) == {'name'}
+    response = client.get('/api/v1/statusy/transit/catalog_check/')
+    assert response.status_code == 200, response.content
+    data = response.json()['data']
+    assert set(data['attributes']) == {'name', 'hint', 'hint_title', 'hint_action'}
+    assert set(data['relationships']) == {'model', 'status_src', 'status_dst'}
+    assert 'secret' not in response.text and 'entity.workflow' not in response.text
+    assert client.get('/api/v1/statusy/transit/').status_code == 200

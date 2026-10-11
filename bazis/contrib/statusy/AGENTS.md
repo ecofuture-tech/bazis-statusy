@@ -71,11 +71,13 @@ class OrderRouteSet(StatusyRouteSetBase):
   Depend on `('contenttypes', '0002_remove_content_type_name')`, the latest migration of
   `statusy` and of the app of the model.
 - Optionally `router.register('bazis.contrib.statusy.router')`: the read-only statuses and
-  transits of every workflow (`statusy/status/`, `statusy/transit/`; names, hints, source
-  and destination statuses, not the methods), a public catalog for every user, also
-  anonymous ones (`permit_public = True`, no `permit.W002` since 2.12.0). Register it if a
-  client names the statuses and transits by their ids; leave it out if the workflow itself
-  must not be public.
+  transits of every workflow, a public catalog (`permit_public = True`, no `permit.W002`
+  since 2.12.0). Registering it publishes the workflow of all the models with statuses to
+  every user, anonymous ones included: `statusy/status/` (`id`, `name`) and
+  `statusy/transit/` (`id`, `name`, `hint`, `hint_title`, `hint_action`, `model`,
+  `status_src`, `status_dst`; not the methods, `source_link`, `is_schema_validate` or
+  `transits_related`). Register it if a client names the statuses and transits by their
+  ids; leave it out if the workflow must not be public.
 
 ## API of a StatusyRouteSetBase route
 

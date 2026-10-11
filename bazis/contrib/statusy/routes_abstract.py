@@ -82,15 +82,19 @@ class StatusRouteBase(JsonapiRouteBase):
 class TransitRouteBase(JsonapiRouteBase):
     model = apps.get_model(settings.BAZIS_STATUSY_TRANSIT_MODEL)
     actions = ['action_list', 'action_retrieve']
-    #: the transits of the workflows (without their methods) are a public catalog (see the
-    #: check permit.W002)
+    #: the transits of the workflows are a public catalog (see the check permit.W002): the
+    #: names, the hints, the model and the statuses, not how the transit runs (its methods,
+    #: its link in the code, its validation, its related transits)
     permit_public = True
     fields = {
         None: SchemaFields(
             exclude={
+                'validators': None,
                 'actions_before': None,
                 'actions_after': None,
                 'source_link': None,
+                'is_schema_validate': None,
+                'transits_related': None,
             }
         )
     }
