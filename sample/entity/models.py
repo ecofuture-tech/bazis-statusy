@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from decimal import Decimal
+
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import F
 from django.utils.translation import gettext_lazy as _
 
 from bazis_test_utils.models_abstract import (
@@ -36,6 +39,7 @@ from bazis.contrib.users import get_user_model
 from bazis.core.models_abstract import DtMixin, JsonApiMixin, UuidMixin
 from bazis.core.triggers import FieldsTransferTrigger, FieldTransferSchema
 from bazis.core.utils import triggers as bazis_triggers
+from bazis.core.utils.orm import FieldAnnotate, calc_property
 
 from .schemas import ParentEntityBeforeSchema, ParentEntityValidatedSchema
 
@@ -88,6 +92,12 @@ class DependentEntity(
     @classmethod
     def get_status_field(cls):
         return 'parent_entity__status_id'
+
+    @calc_property([FieldAnnotate(source='dependent_price_double', query=F('dependent_price') * 2)])
+    def dependent_price_double(self) -> Decimal | None:
+        # only the annotation of the queries of the routes, on purpose (an old recipe of
+        # the guide of the core): the transit of the parent reads the children with it
+        return self.dependent_price_double
 
     class Meta:
         verbose_name = _('Dependent entity')

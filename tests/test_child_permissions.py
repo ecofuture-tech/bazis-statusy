@@ -166,6 +166,33 @@ def test_transit_of_a_parent_needs_no_permission_of_the_children(sample_app, to_
     assert response.json()['data']['relationships']['status']['data']['id'] == 'check'
 
 
+@pytest.mark.django_db(transaction=True)
+def test_transit_reads_the_computed_fields_of_the_children(sample_app, to_check):
+    """
+    The children are read with the computed fields of the transit schema of their route
+    (`calc_property`), as the route reads its objects: a method that returns its own
+    attribute (only the annotation) does not recurse, and a restriction of the transit
+    on a computed field checks the value of the annotation.
+    """
+    doubled = 'entity.dependent_entity.field.transit.all.all.dependent_price_double.notnull'
+    user = user_with('transiting_doubled', *TRANSITING, doubled)
+    parent = ParentEntityFactory()
+    child = DependentEntityFactory(parent_entity=parent, dependent_price=None)
+    client = get_api_client(sample_app, user.jwt_build())
+
+    response = client.post(f'{URL_PARENT}{parent.id}/transit/', json_data={'transit': to_check.id})
+    assert response.status_code == 422, response.text
+    [error] = response.json()['errors']
+    assert error['source']['pointer'].endswith('/dependent_price_double')
+
+    child.dependent_price = 5
+    child.save()
+    response = client.post(f'{URL_PARENT}{parent.id}/transit/', json_data={'transit': to_check.id})
+    assert response.status_code == 200, response.text
+    response = client.get(f'/api/v1/entity/dependent_entity/{child.id}/')
+    assert response.json()['data']['attributes']['dependent_price_double'] == '10.00'
+
+
 PRICED = 'entity.dependent_entity.field.transit.all.all.dependent_price.notnull'
 
 

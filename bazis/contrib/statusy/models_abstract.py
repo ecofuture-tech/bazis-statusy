@@ -23,7 +23,6 @@ from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import SynchronousOnlyOperation
 from django.db import connections, models
 from django.db.utils import OperationalError, ProgrammingError
-from django.utils.functional import cached_property
 from django.utils.timezone import now
 from django.utils.translation import gettext_lazy as _
 
@@ -44,7 +43,13 @@ from bazis.core.item_validation import defer_validate_item
 from bazis.core.models_abstract import InitialBase, JsonApiMixin, logger
 from bazis.core.schemas import CrudAccessAction
 from bazis.core.utils.functools import get_func_sig_param
-from bazis.core.utils.orm import AbstractForeignKey, FieldDynamic, calc_property
+from bazis.core.utils.orm import (
+    AbstractForeignKey,
+    FieldDynamic,
+    calc_cached_property,
+    calc_property,
+    qs_fields_calc,
+)
 from bazis.core.utils.schemas import TranslatedSchemaModel
 
 from . import TransitChildrenError, TransitError
@@ -422,11 +427,6 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         """
         return self._statusy_transits
 
-    @cached_property
-    def statusy_children_items(self) -> list[JsonApiMixin]:
-        for child_model, field_path in self._statusy_children_models_dict.items():
-            yield from child_model.objects.filter(**{field_path: self})
-
     @classmethod
     def get_status_field(cls):
         return 'status_id'
@@ -513,21 +513,33 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         # transit is the one of this item. The errors of a child the user does not view do
         # not disclose it: one error without the child and its fields, after the others
         hidden_invalid = False
-        for child_item in self.statusy_children_items:
-            child_model = child_item.__class__
+        for child_model, field_path in self._statusy_children_models_dict.items():
             child_route = route_cls._routes_child_dict.get(
                 child_model, child_model.get_default_route()
             )
-            schema = SchemasStatusyPermit(child_route, user, child_item).schema_transit_of_child()
-            try:
-                schema.model_validate(child_item)
-            except ValidationError:
-                visible = child_route.restrict_queryset(
-                    child_model.objects.filter(pk=child_item.pk), CrudAccessAction.VIEW, user=user
-                )
-                if visible.exists():
-                    raise
-                hidden_invalid = True
+            # read as the route reads its objects: with the computed fields of its transit
+            # schema (a calc_property may read only the annotation of the query)
+            factory = child_route.schema_factories[StatusyApiAction.TRANSIT]
+            children = qs_fields_calc(
+                child_model.objects.filter(**{field_path: self}),
+                [
+                    name
+                    for name in factory.fields
+                    if type(getattr(child_model, name, None)) is calc_cached_property
+                ],
+                child_route.get_fiter_context(user=user),
+            )
+            for child_item in children:
+                schema = SchemasStatusyPermit(child_route, user, child_item).schema_transit_of_child()
+                try:
+                    schema.model_validate(child_item)
+                except ValidationError:
+                    visible = child_route.restrict_queryset(
+                        child_model.objects.filter(pk=child_item.pk), CrudAccessAction.VIEW, user=user
+                    )
+                    if visible.exists():
+                        raise
+                    hidden_invalid = True
         if hidden_invalid:
             raise JsonApiBazisException(
                 TransitChildrenError(_('Some related items are not valid for this transit')),

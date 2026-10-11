@@ -34,6 +34,10 @@ class ChildEntityRouteSet(StatusySimpleRouteSetBase):
 class DependentEntityRouteSet(StatusySimpleRouteSetBase):
     model = apps.get_model('entity.DependentEntity')
 
+    fields = {
+        None: SchemaFields(include={'dependent_price_double': None}),
+    }
+
 
 class ExtendedEntityRouteSet(StatusySimpleRouteSetBase):
     model = apps.get_model('entity.ExtendedEntity')

@@ -216,7 +216,8 @@ shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft
   (`included`, filters) of the other routes.
 - A transit of the parent with `is_schema_validate` validates the parent with its transit
   schema and every child (all of them, also those the user does not view) with the
-  transit schema of its route: the fields with the restrictions of the field permissions
+  transit schema of its route, read as that route reads its objects (with the
+  `calc_property` fields of the schema, since 2.12.0): the fields with the restrictions of the field permissions
   of the user for the transits of the child model
   (`shop.order_item.field.transit.all.all.price.notnull`), a failure is 422: the errors of
   the fields of a child the user views (`source` with its `id`, `type` and `pointer`);
