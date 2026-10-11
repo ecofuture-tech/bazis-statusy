@@ -75,11 +75,16 @@ from .services import PermitStatusyService
 class StatusRouteBase(JsonapiRouteBase):
     model = apps.get_model(settings.BAZIS_STATUSY_STATUS_MODEL)
     actions = ['action_list', 'action_retrieve']
+    #: the statuses of the workflows are a public catalog (see the check permit.W002)
+    permit_public = True
 
 
 class TransitRouteBase(JsonapiRouteBase):
     model = apps.get_model(settings.BAZIS_STATUSY_TRANSIT_MODEL)
     actions = ['action_list', 'action_retrieve']
+    #: the transits of the workflows (without their methods) are a public catalog (see the
+    #: check permit.W002)
+    permit_public = True
     fields = {
         None: SchemaFields(
             exclude={

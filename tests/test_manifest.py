@@ -58,3 +58,20 @@ def test_routes_without_transits(sample_app, monkeypatch):
     assert [(it.id, it.obj) for it in check_routes_statusy(None)] == [
         ('statusy.W001', PlainParentRoute)
     ]
+
+
+@pytest.mark.django_db
+def test_catalog_routes_are_public(sample_app):
+    """
+    The routes of `bazis.contrib.statusy.router` (registered by the sample) are a public
+    catalog: `permit.W002` does not report them, an anonymous user reads them.
+    """
+    from bazis_test_utils.utils import get_api_client
+
+    from bazis.contrib.permit.checks import check_routes_permit
+
+    warnings = {it.obj.__qualname__ for it in check_routes_permit(None)}
+    assert not warnings & {'StatusRoute', 'TransitRoute'}
+    client = get_api_client(sample_app)
+    for url in ('/api/v1/statusy/status/', '/api/v1/statusy/transit/'):
+        assert client.get(url).status_code == 200, url
