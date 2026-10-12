@@ -19,12 +19,6 @@ from pydantic import Field, field_validator
 from bazis.core.utils.schemas import BazisSettings
 
 
-def status_check(value):
-    if not isinstance(value, list) or len(value) != 2:
-        return False
-    return True
-
-
 class Settings(BazisSettings):
     BAZIS_STATUS_INITIAL: list = Field(['draft', 'Draft'], title=_('Initial status'))
     BAZIS_STATUSY_TRANSIT_MODEL: str = Field('statusy.Transit', title=_('Transit model'))

@@ -144,14 +144,6 @@ class StatusySimpleRouteSetBase(StatusyPermitRouteSetBase):
     class InjectPermit:
         permit: PermitStatusyService = Depends()
 
-    # @classmethod
-    # def cls_init(cls):
-    #     super().cls_init()
-    #
-    #     # a proxy model cannot be used as the base for a status route
-    #     if cls.model._meta.proxy:
-    #         raise Exception("Proxy model can't be model for status-route")
-
     def schemas_make(self):
         def get_item():
             return self.item or self.model
@@ -226,17 +218,6 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
             if isinstance(route, str):
                 route = import_class(route, cls.__module__)
             cls._routes_child_dict[route.model] = route
-        #
-        # # based on model relations, determine whether all routes are specified in the parent
-        # children_models = cls.model._statusy_children_models_dict.keys()
-        #
-        # print(set(children_models), set(cls._routes_child_dict.keys()))
-        #
-        # if set(children_models) - set(cls._routes_child_dict.keys()):
-        #     raise Exception(
-        #         f'StatusyRouteSetBase-base class-route must declare '
-        #         f'"routes_child" for each child model: {list(children_models)}'
-        #     )
 
     @cached_property
     def allow_transits(self) -> list[str]:

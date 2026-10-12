@@ -118,34 +118,6 @@ class StatusyContentTypeManager(ContentTypeManager):
         if hasattr(self, '_statusy_content_types'):
             return qs.filter(self._statusy_content_types)
         return qs
-    #
-    #
-    # def get_queryset(self):
-    #     qs = super().get_queryset()
-    #
-    #     # Get all models inheriting StatusyMixin
-    #     statusy_models = []
-    #     for app_config in apps.get_app_configs():
-    #         for model in app_config.get_models():
-    #             if issubclass(model, StatusyMixin):
-    #                 statusy_models.append(model)
-    #
-    #     # Filter ContentType only for these models
-    #     return qs.filter(
-    #         app_label__in=[model._meta.app_label for model in statusy_models],
-    #         model__in=[model._meta.model_name for model in statusy_models]
-    #     )
-    #
-    #     def gen_content_types():
-    #         try:
-    #             for c_type in ContentType.objects.all():
-    #                 model_class = c_type.model_class()
-    #                 if model_class and issubclass(model_class, StatusyMixin):
-    #                     yield c_type.id
-    #         except ProgrammingError:
-    #             pass
-    #
-    #     return super().get_queryset().filter(id__in=list(gen_content_types()))
 
 
 class StatusyContentTypeMixin(InitialBase):
@@ -208,14 +180,9 @@ class StatusBase(JsonApiMixin):
 
     @classmethod
     def get_status_initial(cls):
-        # """Getting the default status (from settings),
-        #    which will be set for the model if the model has StatusyMixin
-        #    In tests we have an issue that route initialization also touches
-        #    this method, which causes an error because the query goes to the DB, and the DB is not ready,
-        #    to check this just run a test with a model that uses StatusyMixin
-        #    and when importing routes from main.py we will get an error
-        #    RuntimeError: Database access not allowed, use the "django_db" mark ...
-        # """
+        """
+        The default status of the models with `StatusyMixin` (`BAZIS_STATUS_INITIAL`).
+        """
         simple_default = cls(id=settings.BAZIS_STATUS_INITIAL[0], **{
             name_column(language=settings.LANGUAGE_CODE): settings.BAZIS_STATUS_INITIAL[1]
         })
@@ -568,22 +535,6 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         # transit is a model of its own, inheriting the models of all its methods
         if isinstance(payload, BaseModel):
             payload = payload.model_dump(by_alias=True)
-
-        # check for dependent transitions
-        # get the list of child transitions
-        # transit_children = TransitRelation.objects.filter(transit_parent=transit).all()
-
-        # # if the transition has descendants - check that all related objects have changed their status
-        # for child in transit_children:
-        #     # extract the object by selector
-        #     if item := get_attr(self, child.item_selector):
-        #         if item.status != child.transit_child.status_dst:
-        #             errors.append(TransitError(
-        #                 _('Transition `%s` is not executed') % child.transit_child.name,
-        #                 code='TRANSIT_RELATED_REQUIRED',
-        #                 meta_data=item.resource_id,
-        #                 item=item
-        #             ))
 
         # check whether this transition is allowed for the model
         if not isinstance(self, transit.model.model_class()):
