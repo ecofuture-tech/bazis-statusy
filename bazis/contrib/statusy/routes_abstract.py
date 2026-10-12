@@ -127,34 +127,14 @@ class SchemasStatusyPermit(SchemasPermit):
         )
 
 
-class StatusyPermitRouteSetBase(PermitRouteBase):
+class StatusySimpleRouteSetBase(PermitRouteBase):
     abstract: bool = True
     item: StatusyChildMixin | None = None
+    schemas_class = SchemasStatusyPermit
 
     @inject_make()
     class InjectPermit:
         permit: PermitStatusyService = Depends()
-
-
-class StatusySimpleRouteSetBase(StatusyPermitRouteSetBase):
-    abstract: bool = True
-    item: StatusyChildMixin | None = None
-
-    @inject_make()
-    class InjectPermit:
-        permit: PermitStatusyService = Depends()
-
-    def schemas_make(self):
-        def get_item():
-            return self.item or self.model
-
-        self.schemas = SchemasStatusyPermit(
-            type(self), self.inject.user, get_item, getattr(self.inject, 'include', [])
-        )
-
-        self.schemas_responses = SchemasStatusyPermit(
-            type(self), self.inject.user, get_item, getattr(self.inject, 'include', []), True
-        )
 
     @http_get(
         '/{item_id}/schema_transit/',
