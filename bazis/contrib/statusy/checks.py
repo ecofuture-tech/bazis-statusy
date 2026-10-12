@@ -215,23 +215,30 @@ def add_status_messages(
     `reported` (role → slugs) are the permissions another source reports (the declared
     ones, for the roles of the database): a message only about them is left out.
     """
+    from bazis.contrib.permit.declare import parse_permission
+
     models = _statusy_models()
     reported = reported or {}
     messages = []
     for role, slugs in sorted(roles.items()):
         known = reported.get(role, set())
-        # model → its add permissions of the role
-        adds: dict[type, list[str]] = {}
+        # model → its add permissions of the role, slug → status
+        adds: dict[type, dict[str, str]] = {}
         for slug in sorted(slugs):
-            parts = slug.split('.')
-            if len(parts) != 6 or parts[2:4] != ['item', 'add']:
+            perm = parse_permission(slug)
+            if (
+                perm is None
+                or (perm.level, perm.operation) != ('item', 'add')
+                or not perm.status
+                or perm.rest
+            ):
                 continue
-            if (model := models.get((parts[0], parts[1]))) is not None:
-                adds.setdefault(model, []).append(slug)
+            if (model := models.get((perm.app_label, perm.model_name))) is not None:
+                adds.setdefault(model, {})[slug] = perm.status
         for model, found in adds.items():
             label = f'{model.get_resource_app()}.{model.get_resource_name()}'
             initial = _initial_status(model)
-            statuses = {it.rsplit('.', 1)[1] for it in found}
+            statuses = set(found.values())
             if 'all' not in statuses and initial not in statuses and not set(found) <= known:
                 messages.append(
                     Warning(
@@ -250,8 +257,8 @@ def add_status_messages(
             if 'all' not in statuses or _status_hidden_on_create(label, slugs):
                 continue
             routes = _routes_with_status(model)
-            for slug in found:
-                if slug.rsplit('.', 1)[1] != 'all' or not routes or slug in known:
+            for slug, status in found.items():
+                if status != 'all' or not routes or slug in known:
                     continue
                 names = ', '.join(f'{it.__module__}.{it.__qualname__}' for it in routes)
                 messages.append(

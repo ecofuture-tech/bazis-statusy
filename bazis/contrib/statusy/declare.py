@@ -214,6 +214,7 @@ def _permission_messages(workflows: list[tuple[str, Workflow]], error) -> None:
     of the model and its source status.
     """
     from bazis.contrib.permit.declare import declarations as permit_declarations
+    from bazis.contrib.permit.declare import parse_permission
 
     declared = {}
     for _module, workflow in workflows:
@@ -226,25 +227,29 @@ def _permission_messages(workflows: list[tuple[str, Workflow]], error) -> None:
     groups, _roles = permit_declarations()
     for module, group in groups:
         for slug in getattr(group, 'permissions', ()):
-            parts = slug.split('.')
-            if len(parts) < 6 or (found := declared.get((parts[0], parts[1]))) is None:
+            perm = parse_permission(slug)
+            if (
+                perm is None
+                or not perm.status
+                or (found := declared.get((perm.app_label, perm.model_name))) is None
+            ):
                 continue
             statuses, transits = found
-            status = parts[5]
+            label, status = f'{perm.app_label}.{perm.model_name}', perm.status
             if status != 'all' and status not in statuses:
                 error(
                     f'The permission {slug} of the group {group.slug} names the status {status}, '
-                    f'which is not a status of the workflow of {parts[0]}.{parts[1]}.', module,
+                    f'which is not a status of the workflow of {label}.', module,
                     id='statusy.E003',
                 )
                 continue
-            if len(parts) != 7 or parts[2:4] != ['item', 'transit']:
+            if (perm.level, perm.operation) != ('item', 'transit') or len(perm.rest) != 1:
                 continue
-            transit_id = parts[6]
+            transit_id = perm.rest[0]
             if (transit := transits.get(transit_id)) is None:
                 error(
                     f'The permission {slug} of the group {group.slug} names the transit '
-                    f'{transit_id}, which is not declared for {parts[0]}.{parts[1]}.', module,
+                    f'{transit_id}, which is not declared for {label}.', module,
                     id='statusy.E003',
                 )
             elif status not in ('all', transit.src):
