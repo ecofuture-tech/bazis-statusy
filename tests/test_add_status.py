@@ -237,7 +237,9 @@ def test_w006_a_role_that_creates_in_any_status(sample_app, monkeypatch):
         {'role': {'entity.parent_entity.item.add.all.draft'}}, 'roles.py'
     ) == []
     monkeypatch.setitem(
-        ParentEntityRouteSet.schema_factories, CrudApiAction.CREATE, SimpleNamespace(fields_list=[])
+        ParentEntityRouteSet.schema_factories,
+        CrudApiAction.CREATE,
+        SimpleNamespace(fields_patch=lambda restricts: []),
     )
     assert checks.add_status_messages({'role': {slug}}, 'roles.py') == []
 
@@ -272,11 +274,13 @@ def test_a_role_without_the_status_on_create(sample_app, statuses, restriction):
 
     slug = 'entity.parent_entity.item.add.all.all'
     assert checks.add_status_messages({'role': {slug, status_field}}, 'roles.py') == []
-    # enabled again by its own permission: reported
-    assert [it.id for it in checks.add_status_messages(
-        {'role': {slug, 'entity.parent_entity.field.add.all.all.__all__.disable',
-                  'entity.parent_entity.field.add.all.all.status.enable'}}, 'roles.py'
-    )] == ['statusy.W006']
+    # shown again by its own permission (`writeonly` too, as in the schema of the core):
+    # reported
+    for shown in ('enable', 'writeonly'):
+        assert [it.id for it in checks.add_status_messages(
+            {'role': {slug, 'entity.parent_entity.field.add.all.all.__all__.disable',
+                      f'entity.parent_entity.field.add.all.all.status.{shown}'}}, 'roles.py'
+        )] == ['statusy.W006'], shown
     # hidden with every field
     assert checks.add_status_messages(
         {'role': {slug, 'entity.parent_entity.field.add.all.all.__all__.readonly'}}, 'roles.py'

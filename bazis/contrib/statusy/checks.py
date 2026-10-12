@@ -148,19 +148,12 @@ def _statusy_models() -> dict[tuple[str, str], type]:
     }
 
 
-def _initial_status(model) -> str:
-    """The status of a new object of the model created without one."""
-    from django.conf import settings
-
-    from .declare import initial_status
-
-    return initial_status(model) or settings.BAZIS_STATUS_INITIAL[0]
-
-
-def _routes_with_status(model) -> list[type]:
+def _routes_with_status(model, restricts: dict[str, set[str]]) -> list[type]:
     """
-    The registered route sets of the model whose create schema accepts `status` (the
-    application must be loaded: `manage.py bazis_doctor`).
+    The registered route sets of the model whose create schema accepts `status` with the
+    field restrictions of add of a role (`fields_patch` of the core): shown and not
+    read-only (a create ignores a read-only field). The application must be loaded
+    (`manage.py bazis_doctor`).
     """
     from bazis.core.introspect import loaded_app, route_sets
     from bazis.core.schemas import CrudApiAction
@@ -174,27 +167,13 @@ def _routes_with_status(model) -> list[type]:
         ):
             continue
         factory = route_cls.schema_factories.get(CrudApiAction.CREATE)
-        if factory is not None and any(it.name == 'status' for it in factory.fields_list):
+        if factory is None:
+            continue
+        # fields_patch changes the sets it is given
+        fields = factory.fields_patch({k: set(v) for k, v in restricts.items()})
+        if any(it.name == 'status' and not it.read_only for it in fields):
             found.append(route_cls)
     return found
-
-
-def _status_hidden_on_create(label: str, slugs: set[str]) -> bool:
-    """
-    Whether the field permissions of add without a condition of the role
-    (`<label>.field.add.all.all.<field>.<restriction>`) hide `status` from its create schema
-    or make it read-only (a create ignores it): its own `disable` or `readonly` without
-    `enable`, else those of `__all__`.
-    """
-    prefix = f'{label}.field.add.all.all.'
-    restricts: dict[str, set[str]] = {}
-    for slug in slugs:
-        if slug.startswith(prefix) and len(rest := slug[len(prefix):].split('.', 1)) == 2:
-            restricts.setdefault(rest[0], set()).update(rest[1].split('|'))
-    for key in ('status', '__all__'):
-        if own := restricts.get(key, set()) & {'enable', 'disable', 'readonly'}:
-            return 'enable' not in own
-    return False
 
 
 def add_status_messages(
@@ -208,36 +187,46 @@ def add_status_messages(
     - statusy.W005: none of the add permissions of a role on a model names its initial
       status (or `all`): a create without `status` is refused (403);
     - statusy.W006: `item.add.<selector>.all` while a route of the model accepts `status`
-      on a create, unless the field permissions of add of the role hide it or make it
-      read-only (`field.add.all.all.status.disable`): the role creates objects in any
+      on a create with the field permissions of add of the role, which may hide it or make
+      it read-only (`field.add.all.all.status.disable`): the role creates objects in any
       status, skipping the transits.
 
     `reported` (role → slugs) are the permissions another source reports (the declared
     ones, for the roles of the database): a message only about them is left out.
     """
+    from django.conf import settings
+
     from bazis.contrib.permit.declare import parse_permission
+    from bazis.contrib.permit.schemas import PERM_ALL
+
+    from .declare import initial_status
 
     models = _statusy_models()
     reported = reported or {}
     messages = []
     for role, slugs in sorted(roles.items()):
         known = reported.get(role, set())
-        # model → its add permissions of the role, slug → status
+        # model → its item permissions of add of the role (slug → status), and the
+        # restrictions of its field permissions of add without a condition (field → them)
         adds: dict[type, dict[str, str]] = {}
+        restricts: dict[type, dict[str, set[str]]] = {}
         for slug in sorted(slugs):
             perm = parse_permission(slug)
-            if (
-                perm is None
-                or (perm.level, perm.operation) != ('item', 'add')
-                or not perm.status
-                or perm.rest
-            ):
+            if perm is None or (model := models.get((perm.app_label, perm.model_name))) is None:
                 continue
-            if (model := models.get((perm.app_label, perm.model_name))) is not None:
+            if (perm.level, perm.operation) == ('item', 'add') and perm.status and not perm.rest:
                 adds.setdefault(model, {})[slug] = perm.status
+            elif (
+                (perm.level, perm.operation) == ('field', 'add')
+                and perm.field
+                and all(it == PERM_ALL for it in perm.condition)
+            ):
+                restricts.setdefault(model, {}).setdefault(perm.field, set()).update(
+                    perm.restricts
+                )
         for model, found in adds.items():
             label = f'{model.get_resource_app()}.{model.get_resource_name()}'
-            initial = _initial_status(model)
+            initial = initial_status(model) or settings.BAZIS_STATUS_INITIAL[0]
             statuses = set(found.values())
             if 'all' not in statuses and initial not in statuses and not set(found) <= known:
                 messages.append(
@@ -254,9 +243,9 @@ def add_status_messages(
                         id='statusy.W005',
                     )
                 )
-            if 'all' not in statuses or _status_hidden_on_create(label, slugs):
+            if 'all' not in statuses:
                 continue
-            routes = _routes_with_status(model)
+            routes = _routes_with_status(model, restricts.get(model, {}))
             for slug, status in found.items():
                 if status != 'all' or not routes or slug in known:
                     continue
@@ -279,26 +268,15 @@ def add_status_messages(
     return messages
 
 
-def _declared_roles() -> dict[str, set[str]]:
-    """The roles declared in the `roles.py` modules (bazis-permit), with their permissions."""
-    from bazis.contrib.permit.declare import Group, Role, declarations
-
-    groups, roles = declarations()
-    permissions = {it.slug: set(it.permissions) for _module, it in groups if isinstance(it, Group)}
-    return {
-        role.slug: set().union(*(permissions.get(it, set()) for it in role.groups))
-        for _module, role in roles
-        if isinstance(role, Role)
-    }
-
-
 @register()
 def check_add_statuses(app_configs, **kwargs):
     """
     statusy.W005 and statusy.W006 for the roles declared in the `roles.py` modules of
     bazis-permit. statusy.W006 needs the loaded application (`manage.py bazis_doctor`).
     """
-    return add_status_messages(_declared_roles(), 'roles.py')
+    from bazis.contrib.permit.declare import declared_role_permissions
+
+    return add_status_messages(declared_role_permissions(), 'roles.py')
 
 
 @register(Tags.database)
@@ -309,20 +287,9 @@ def check_add_statuses_applied(app_configs, databases=None, **kwargs):
     groups; what only the declared permissions of a role cause is left to
     `check_add_statuses`. Skipped while migrations are not applied.
     """
-    from django.apps import apps
+    from bazis.contrib.permit.declare import database_role_permissions, declared_role_permissions
 
-    from bazis.core.declare import migrations_complete
-
-    roles: dict[str, set[str]] = {}
-    for using in databases or ():
-        if not migrations_complete(using):
-            continue
-        for role, slug in (
-            apps.get_model('permit.Role')
-            .objects.using(using)
-            .filter(groups_permission__permissions__slug__contains='.add.')
-            .values_list('slug', 'groups_permission__permissions__slug')
-            .distinct()
-        ):
-            roles.setdefault(role, set()).add(slug)
-    return add_status_messages(roles, 'the database', reported=_declared_roles())
+    roles = database_role_permissions(
+        databases, groups_permission__permissions__slug__contains='.add.'
+    )
+    return add_status_messages(roles, 'the database', reported=declared_role_permissions())
