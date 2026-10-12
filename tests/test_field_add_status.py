@@ -17,8 +17,10 @@ The status segment of the field permissions of `add` (bazis-permit 2.11): the cr
 is built before the object exists, and the CREATE schema accepts an initial `status`, so the
 status of a new object is not known. `field.add.all.all.<field>` applies to every create;
 `field.add.<selector>.<status>.<field>` with a status (the initial one too) or a selector
-other than `all` never applies: `roles.py` refuses it (permit.E006), a permission of the
-database is logged. The field permissions of `change` and `view` keep their status.
+other than `all` never applies: `roles.py` refuses it (permit.E006; a warning for `enable`),
+`bazis_doctor` reports one of the database (permit.W010). The field permissions of `change`
+and `view` keep their status; the item permissions of `add` restrict the status a role
+creates in (`test_add_status.py`).
 """
 
 from django.core.cache import cache
@@ -99,10 +101,6 @@ def create(client, status: str | None = None, **attributes):
             'entity.parent_entity.field.add.author.all.__all__.disable',
             'entity.parent_entity.field.add.all.all.__all__.disable',
         ),
-        (
-            'entity.parent_entity.field.add.author.draft.price.enable',
-            'entity.parent_entity.field.add.all.all.price.enable',
-        ),
     ],
 )
 def test_add_field_permission_with_a_status_is_refused(slug, fixed):
@@ -112,7 +110,17 @@ def test_add_field_permission_with_a_status_is_refused(slug, fixed):
         if it.is_serious()
     ]
     assert [it.id for it in messages] == ['permit.E006']
-    assert messages[0].hint == f'Write {fixed}: it applies to every create of the role.'
+    assert messages[0].hint == f'Write {fixed}: it restricts the field on every create of the role.'
+
+
+def test_add_field_permission_with_a_status_that_shows_is_a_warning():
+    """`enable` with a status never applies either: the create stays stricter (a warning)."""
+    slug = 'entity.parent_entity.field.add.author.draft.price.enable'
+    messages = declaration_messages([('app.roles', Group('decl', 'Decl', [slug]))], [])
+    assert [(it.id, it.is_serious()) for it in messages] == [('permit.E006', False)]
+    assert messages[0].hint.startswith(
+        'Remove it, or write entity.parent_entity.field.add.all.all.price.enable only if'
+    )
 
 
 @pytest.mark.parametrize(
@@ -144,17 +152,15 @@ def test_add_field_permission_of_all_statuses_hides_the_field(sample_app, status
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize('status', ['draft', 'open'])
-def test_add_field_permission_of_a_status_never_applies(sample_app, statuses, caplog, status):
+def test_add_field_permission_of_a_status_never_applies(sample_app, statuses, status):
     """
     With a status, the initial one (`draft`) or another, the field permission of add never
-    applies (the status of a new object is not known): logged, the price is written.
+    applies (the status of a new object is not known): the price is written.
     """
     client = client_with(
         sample_app, f'adder_{status}', f'entity.parent_entity.field.add.all.{status}.price.disable'
     )
-    with caplog.at_level('WARNING', logger='bazis.contrib.permit.services'):
-        assert 'price' in create_attributes(client)
-    assert 'do not apply to a create: price (permit.E006)' in caplog.text
+    assert 'price' in create_attributes(client)
     response = create(client, price='5.00')
     assert response.status_code == 201, response.content
     assert ParentEntity.objects.get(id=response.json()['data']['id']).price == 5
