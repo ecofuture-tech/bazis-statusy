@@ -276,3 +276,19 @@ def test_the_roles_of_the_database(sample_app, monkeypatch):
         permit_declare, 'declarations', lambda: ([], [('roles', Role('opener', 'Opener', []))])
     )
     assert checks.check_add_statuses_applied(None, databases=['default']) == []
+
+
+@pytest.mark.django_db(transaction=True)
+def test_add_of_a_status_that_does_not_exist(sample_app, statuses):
+    """
+    A status that does not exist is 422 at its identifier (bazis 2.16: the statuses are a
+    catalog whose route restricts nothing, so the core looks the related object up); it was
+    an integrity error at the commit, a 500.
+    """
+    client = client_with(sample_app, 'anyone', 'entity.parent_entity.item.add.all.all')
+    response = create(client, 'nowhere')
+    assert response.status_code == 422, response.content
+    assert [(it['code'], it['source']) for it in response.json()['errors']] == [
+        ('ERR_VALIDATE', {'pointer': '/data/relationships/status/data/id'})
+    ]
+    assert not ParentEntity.objects.exists()

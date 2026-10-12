@@ -91,7 +91,8 @@ class OrderRouteSet(StatusyRouteSetBase):
   refused) and of `item.add.<selector>.all` while a route of the model accepts `status`
   on a create (`statusy.W006`), for the roles of `roles.py` and those made in the admin
   (with the database checks). A status that is not one of the workflow of the model is
-  not refused by the permission `all`.
+  not refused by the permission `all`; a status that does not exist is 422 `ERR_VALIDATE`
+  at `/data/relationships/status/data/id` (bazis 2.16; a 500 before).
 
 ## Workflows in the code (`workflow.py`)
 
