@@ -295,7 +295,7 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
             action_schemas_related = self._build_transits_schemas(
                 [
                     (it.transit_child, it.item_selector)
-                    for it in apps.get_model('statusy.TransitRelation').objects.filter(transit_parent=transit)
+                    for it in apps.get_model(settings.BAZIS_STATUSY_TRANSIT_RELATION_MODEL).objects.filter(transit_parent=transit)
                 ]
             )
 
@@ -313,7 +313,7 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
             self._build_transits_schemas(
                 [
                     (transit, None)
-                    for transit in apps.get_model('statusy.Transit').objects.filter(
+                    for transit in apps.get_model(settings.BAZIS_STATUSY_TRANSIT_MODEL).objects.filter(
                         pk__in=self.allow_transits,
                         transit_relations_as_child=None,
                     )
