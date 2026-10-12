@@ -231,6 +231,7 @@ def test_w006_a_role_that_creates_in_any_status(sample_app, monkeypatch):
     assert messages[0].msg.startswith(f'The permission {slug} of the role role (roles.py)')
     assert 'entity.routes.ParentEntityRouteSet accepts `status`' in messages[0].msg
     assert 'Guest' not in messages[0].msg
+    assert 'entity.parent_entity.field.add.all.all.status.disable' in messages[0].hint
 
     assert checks.add_status_messages(
         {'role': {'entity.parent_entity.item.add.all.draft'}}, 'roles.py'
@@ -239,6 +240,56 @@ def test_w006_a_role_that_creates_in_any_status(sample_app, monkeypatch):
         ParentEntityRouteSet.schema_factories, CrudApiAction.CREATE, SimpleNamespace(fields_list=[])
     )
     assert checks.add_status_messages({'role': {slug}}, 'roles.py') == []
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize('restriction', ['disable', 'readonly'])
+def test_a_role_without_the_status_on_create(sample_app, statuses, restriction):
+    """
+    `field.add.all.all.status.disable` hides the status from the create schema of the role
+    (a create with it is 422), `readonly` makes a create ignore it: the role creates in the
+    initial status only, whatever `item.add.all.all`, and statusy.W006 does not report it.
+    """
+    status_field = f'entity.parent_entity.field.add.all.all.status.{restriction}'
+    client = client_with(
+        sample_app, restriction, 'entity.parent_entity.item.add.all.all', status_field
+    )
+    response = client.get(f'{URL}schema_create/')
+    relationships = {
+        field: schema
+        for name, schema in response.json()['$defs'].items()
+        if name.endswith('__Relationships')
+        for field, schema in (schema.get('properties') or {}).items()
+    }
+    response = create(client, 'open')
+    if restriction == 'disable':
+        assert 'status' not in relationships
+        assert response.status_code == 422, response.content
+    else:
+        assert relationships['status'].get('readOnly') is True
+        assert_created(response, 'draft')
+    assert_created(create(client), 'draft')
+
+    slug = 'entity.parent_entity.item.add.all.all'
+    assert checks.add_status_messages({'role': {slug, status_field}}, 'roles.py') == []
+    # enabled again by its own permission: reported
+    assert [it.id for it in checks.add_status_messages(
+        {'role': {slug, 'entity.parent_entity.field.add.all.all.__all__.disable',
+                  'entity.parent_entity.field.add.all.all.status.enable'}}, 'roles.py'
+    )] == ['statusy.W006']
+    # hidden with every field
+    assert checks.add_status_messages(
+        {'role': {slug, 'entity.parent_entity.field.add.all.all.__all__.readonly'}}, 'roles.py'
+    ) == []
+    # a field permission of another model, of change or with a condition: reported
+    for other in (
+        'entity.dependent_entity.field.add.all.all.status.disable',
+        'entity.parent_entity.field.change.all.all.status.disable',
+        'entity.parent_entity.field.add.author.all.status.disable',
+    ):
+        assert [it.id for it in checks.add_status_messages({'role': {slug, other}}, 'roles.py')] == [
+            'statusy.W006'
+        ], other
 
 
 def test_the_declared_roles(sample_app, monkeypatch):
@@ -272,10 +323,24 @@ def test_the_roles_of_the_database(sample_app, monkeypatch):
     assert codes(messages) == [('statusy.W005', 'opener')]
     assert '(the database)' in messages[0].msg
 
+    # the permissions the declaration of the role gives are reported by check_add_statuses
+    openers = Group('openers', 'Openers', ['entity.parent_entity.item.add.all.open'])
     monkeypatch.setattr(
-        permit_declare, 'declarations', lambda: ([], [('roles', Role('opener', 'Opener', []))])
+        permit_declare,
+        'declarations',
+        lambda: ([('roles', openers)], [('roles', Role('opener', 'Opener', [openers]))]),
     )
     assert checks.check_add_statuses_applied(None, databases=['default']) == []
+    # a permission the admin attached to a declared role is the database's
+    role_with('opener_extra', 'entity.parent_entity.item.add.author.all')
+    RoleModel.objects.get(slug='opener').groups_permission.add(
+        GroupPermission.objects.get(slug='opener_extra')
+    )
+    messages = checks.check_add_statuses_applied(None, databases=['default'])
+    assert [(it.id, it.msg.split()[6]) for it in messages] == [
+        ('statusy.W006', 'opener'),
+        ('statusy.W006', 'opener_extra'),
+    ]
 
 
 @pytest.mark.django_db(transaction=True)

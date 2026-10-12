@@ -89,8 +89,10 @@ class OrderRouteSet(StatusyRouteSetBase):
   name (or `all`). `bazis_doctor` warns of a role whose add permissions on a model name
   neither its initial status nor `all` (`statusy.W005`: every create without `status` is
   refused) and of `item.add.<selector>.all` while a route of the model accepts `status`
-  on a create (`statusy.W006`), for the roles of `roles.py` and those made in the admin
-  (with the database checks). A status that is not one of the workflow of the model is
+  on a create and the role does not hide it (`statusy.W006`), for the roles of `roles.py`
+  and those of the database (with the database checks). To take the choice away from one
+  role only, hide the field from its creates: `shop.order.field.add.all.all.status.disable`
+  (a create with it is 422) or `readonly` (a create ignores it). A status that is not one of the workflow of the model is
   not refused by the permission `all`; a status that does not exist is 422 `ERR_VALIDATE`
   at `/data/relationships/status/data/id` (bazis 2.16; a 500 before).
 
