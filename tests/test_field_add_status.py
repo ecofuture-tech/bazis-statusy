@@ -17,7 +17,7 @@ The status segment of the field permissions of `add` (bazis-permit 2.11): the cr
 is built before the object exists, and the CREATE schema accepts an initial `status`, so the
 status of a new object is not known. `field.add.all.all.<field>` applies to every create;
 `field.add.<selector>.<status>.<field>` with a status (the initial one too) or a selector
-other than `all` never applies: `roles.py` refuses it (permit.E006; a warning for `enable`),
+other than `all` never applies: `roles.py` refuses it (permit.E006; `enable`: the warning permit.W011),
 `bazis_doctor` reports one of the database (permit.W010). The field permissions of `change`
 and `view` keep their status; the item permissions of `add` restrict the status a role
 creates in (`test_add_status.py`).
@@ -117,7 +117,7 @@ def test_add_field_permission_with_a_status_that_shows_is_a_warning():
     """`enable` with a status never applies either: the create stays stricter (a warning)."""
     slug = 'entity.parent_entity.field.add.author.draft.price.enable'
     messages = declaration_messages([('app.roles', Group('decl', 'Decl', [slug]))], [])
-    assert [(it.id, it.is_serious()) for it in messages] == [('permit.E006', False)]
+    assert [(it.id, it.is_serious()) for it in messages] == [('permit.W011', False)]
     assert messages[0].hint.startswith(
         'Remove it, or write entity.parent_entity.field.add.all.all.price.enable only if'
     )
