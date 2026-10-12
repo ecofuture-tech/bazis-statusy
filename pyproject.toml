@@ -34,7 +34,7 @@ classifiers = [
 ]
 dependencies = [
     "bazis>=2.14.0",  # raise to >=2.16.0 at the release: RouteKind of schema_transit, public, bazis.core.declare
-    "bazis-permit>=2.9.0",  # raise to >=2.11.0 at the release: actions closed to anonymous users
+    "bazis-permit>=2.9.0",  # raise to >=2.11.0 at the release: actions closed to anonymous users, the status of item.add checked on the created item
 ]
 
 [project.optional-dependencies]

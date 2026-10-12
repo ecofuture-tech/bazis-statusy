@@ -13,7 +13,7 @@ Rules.
 
 | Section | Read it when |
 |---|---|
-| Setup | you give a model statuses: `StatusyMixin`, `StatusyRouteSetBase`, the migrations, the initial status, the public catalog router, the permissions by status |
+| Setup | you give a model statuses: `StatusyMixin`, `StatusyRouteSetBase`, the migrations, the initial status, the public catalog router, the permissions by status, the status of a create (`statusy.W005`, `W006`) |
 | Workflows in the code (`workflow.py`) | you declare the statuses and transits of a model: `Workflow`, `Status`, `Transit`, `initial=`, what `migrate` applies, the checks `statusy.E001`–`E004`, `W003`, `W004` |
 | Validators, actions and the payload | you write the methods of a transit: `transit_validator`, `transit_before`, `transit_after`, `TransitError`, the payload type, a required text, the titles of its fields |
 | API of a StatusyRouteSetBase route | a client makes a transit: `POST /{item_id}/transit/` and its answers, `schema_transit`, a transit for anonymous users, the meta `state_actions`, `status_aggs` |
@@ -71,9 +71,27 @@ class OrderRouteSet(StatusyRouteSetBase):
 
   ```
   shop.order.item.view.all.all
+  shop.order.item.add.all.draft                    # create only in `draft`
   shop.order.item.change.author.draft              # change only in `draft`
   shop.order.item.transit.author.draft.to_paid     # transit `to_paid` from `draft`
   ```
+
+- **The status of a create.** The CREATE schema accepts an initial `status` (omitted: the
+  initial status of the model), and bazis-permit (2.11) checks the created item against
+  the `item.add` permissions of the user, the status segment literally: with
+  `item.add.all.draft` a create without `status`, or with `draft`, is allowed, one with
+  `paid` is 403 `ERR_FORBIDDEN` (nothing written); `item.add.all.paid` creates only with
+  `paid` sent, a create without `status` (`draft`) is 403; `item.add.all.all` creates in any
+  status the client sends, skipping the transits, their validators, actions and
+  permissions. Name the statuses a role creates in. To take the choice away from every
+  client, exclude the field: `CrudApiAction.CREATE: SchemaFields(exclude={'status': None})`
+  on the route; every create then gets the initial status, which the add permissions must
+  name (or `all`). `bazis_doctor` warns of a role whose add permissions on a model name
+  neither its initial status nor `all` (`statusy.W005`: every create without `status` is
+  refused) and of `item.add.<selector>.all` while a route of the model accepts `status`
+  on a create (`statusy.W006`), for the roles of `roles.py` and those made in the admin
+  (with the database checks). A status that is not one of the workflow of the model is
+  not refused by the permission `all`.
 
 ## Workflows in the code (`workflow.py`)
 
@@ -255,7 +273,10 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
   has no author. Do not pass the user of the request for it: the history would say that
   he made a transit his permissions may not allow. A project that names its system actor
   passes a user of its own for it.
-- An automatic transit on create, in `hook_after_create` of the route: by itself the
+- An automatic transit on create, in `hook_after_create` of the route, after `super()`:
+  bazis-permit checks the item against the `item.add` permissions of the user there, with
+  the status of creation, so the transit (the server's, not the user's) comes after the
+  check and the role needs `item.add` of the initial status only. By itself the
   transit is validated with the create, once, as `create` with the user of the route
   (`changes.user`, also for a transit without a user), but its validators run before that
   validation. Validate the new item first, so that an invalid one answers with the errors
@@ -312,9 +333,11 @@ the model of its own over `statusy_transits` (see the guide of the core).
   `status_dt`, `status_author` (a write with them is 422 `ERR_VALIDATE` `extra_forbidden`
   from bazis 2.12, at `/data/relationships/<f>` or `/data/attributes/status_dt`; before it
   they were ignored); the `fields` of a route add up with them, do not exclude them again.
-  The CREATE schema accepts an initial `status` (the initial status if omitted):
-  restrict it with `add` permissions by status, or exclude it
-  (`CrudApiAction.CREATE: SchemaFields(exclude={'status': None})`).
+  The CREATE schema accepts an initial `status` (the initial status if omitted): the
+  `add` permissions by status restrict it (`item.add.all.draft`: only `draft`; checked on
+  the created item by bazis-permit 2.11, see Setup), or exclude it
+  (`CrudApiAction.CREATE: SchemaFields(exclude={'status': None})`: always the initial
+  status).
   `StatusyRouteSetBase` adds the actions `action_transit` and `action_schema_transit` and
   no hooks (those of bazis-permit apply).
 - Every JSON:API route that changes a statusy model inherits `StatusyRouteSetBase` (`statusy.W001`);

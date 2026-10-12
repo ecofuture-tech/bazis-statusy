@@ -69,7 +69,15 @@ import = "bazis.contrib.statusy.declare.Workflow"
 use_when = "the statuses and transits of a model declared in the WORKFLOWS of <app>/workflow.py, applied by migrate; initial= the status of its new objects"
 
 [[pitfalls]]
-text = "the CREATE schema accepts an initial `status`: restrict it with `add` permissions by status, or exclude it"
+text = "the CREATE schema accepts an initial `status`: the item.add permissions by status restrict it (bazis-permit 2.11 checks the created item; item.add.all.draft creates only in draft), or exclude it"
+
+[[pitfalls]]
+text = "a role whose item.add permissions on a model name neither its initial status nor all refuses every create without status"
+check = "statusy.W005"
+
+[[pitfalls]]
+text = "item.add.<selector>.all while the create schema accepts status: the role creates in any status, skipping the transits"
+check = "statusy.W006"
 
 [[pitfalls]]
 text = "a route of a StatusyMixin model that does not inherit StatusyRouteSetBase has no transits and ignores the permissions by status"

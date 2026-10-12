@@ -130,3 +130,162 @@ def check_declarations_applied(app_configs, databases=None, **kwargs):
                 )
             )
     return messages
+
+
+def _statusy_models() -> dict[tuple[str, str], type]:
+    """
+    The models with a status of their own (`StatusyMixin`, not the children whose status is
+    their parent's) by the app and the resource name of their permissions.
+    """
+    from django.apps import apps
+
+    from .models_abstract import StatusyMixin
+
+    return {
+        (model.get_resource_app(), model.get_resource_name()): model
+        for model in apps.get_models()
+        if issubclass(model, StatusyMixin)
+    }
+
+
+def _initial_status(model) -> str:
+    """The status of a new object of the model created without one."""
+    from django.conf import settings
+
+    from .declare import initial_status
+
+    return initial_status(model) or settings.BAZIS_STATUS_INITIAL[0]
+
+
+def _routes_with_status(model) -> list[type]:
+    """
+    The registered route sets of the model whose create schema accepts `status` (the
+    application must be loaded: `manage.py bazis_doctor`).
+    """
+    from bazis.core.introspect import loaded_app, route_sets
+    from bazis.core.schemas import CrudApiAction
+
+    if (app := loaded_app()) is None:
+        return []
+    found = []
+    for route_cls, routes in route_sets(app).items():
+        if getattr(route_cls, 'model', None) is not model or not any(
+            it['action'] == 'action_create' for it in routes
+        ):
+            continue
+        factory = route_cls.schema_factories.get(CrudApiAction.CREATE)
+        if factory is not None and any(it.name == 'status' for it in factory.fields_list):
+            found.append(route_cls)
+    return found
+
+
+def add_status_messages(roles: dict[str, set[str]], source: str) -> list[Warning]:
+    """
+    The item permissions of add of the roles (`roles`: their slug → their permission
+    slugs, from `source`) on the models with statuses. bazis-permit (2.11) checks the
+    status of the created item against them, literally:
+
+    - statusy.W005: none of the add permissions of a role on a model names its initial
+      status (or `all`): a create without `status` is refused (403);
+    - statusy.W006: `item.add.<selector>.all` while a route of the model accepts `status`
+      on a create: the role creates objects in any status, skipping the transits.
+    """
+    models = _statusy_models()
+    messages = []
+    for role, slugs in sorted(roles.items()):
+        # model → its add permissions of the role
+        adds: dict[type, list[str]] = {}
+        for slug in sorted(slugs):
+            parts = slug.split('.')
+            if len(parts) != 6 or parts[2:4] != ['item', 'add']:
+                continue
+            if (model := models.get((parts[0], parts[1]))) is not None:
+                adds.setdefault(model, []).append(slug)
+        for model, found in adds.items():
+            label = f'{model.get_resource_app()}.{model.get_resource_name()}'
+            initial = _initial_status(model)
+            statuses = {it.rsplit('.', 1)[1] for it in found}
+            if 'all' not in statuses and initial not in statuses:
+                messages.append(
+                    Warning(
+                        f'The role {role} ({source}) creates {label} only in the statuses '
+                        f'{", ".join(sorted(statuses))} ({", ".join(found)}), not in its initial '
+                        f'status {initial}: every create of the role without `status` is '
+                        'refused (403).',
+                        hint=(
+                            f'If the role creates in {initial}, grant {label}.item.add.'
+                            f'<selector>.{initial}; if it creates only in another status, its '
+                            'client sends the status (the create schema of the route accepts it).'
+                        ),
+                        id='statusy.W005',
+                    )
+                )
+            routes = _routes_with_status(model) if 'all' in statuses else []
+            for slug in found:
+                if slug.rsplit('.', 1)[1] != 'all' or not routes:
+                    continue
+                names = ', '.join(f'{it.__module__}.{it.__qualname__}' for it in routes)
+                messages.append(
+                    Warning(
+                        f'The permission {slug} of the role {role} ({source}) creates {label} '
+                        f'in any status: the create schema of {names} accepts `status`, so a '
+                        'create skips the transits, their validators, actions and permissions.',
+                        hint=(
+                            f'Name the statuses the role creates in ({label}.item.add.<selector>.'
+                            f'{initial}), or exclude the status from the create schema of the route '
+                            "(CrudApiAction.CREATE: SchemaFields(exclude={'status': None}))."
+                        ),
+                        id='statusy.W006',
+                    )
+                )
+    return messages
+
+
+def _declared_roles() -> dict[str, set[str]]:
+    """The roles declared in the `roles.py` modules (bazis-permit), with their permissions."""
+    from bazis.contrib.permit.declare import Group, Role, declarations
+
+    groups, roles = declarations()
+    permissions = {it.slug: set(it.permissions) for _module, it in groups if isinstance(it, Group)}
+    return {
+        role.slug: set().union(*(permissions.get(it, set()) for it in role.groups))
+        for _module, role in roles
+        if isinstance(role, Role)
+    }
+
+
+@register()
+def check_add_statuses(app_configs, **kwargs):
+    """
+    statusy.W005 and statusy.W006 for the roles declared in the `roles.py` modules of
+    bazis-permit. statusy.W006 needs the loaded application (`manage.py bazis_doctor`).
+    """
+    return add_status_messages(_declared_roles(), 'roles.py')
+
+
+@register(Tags.database)
+def check_add_statuses_applied(app_configs, databases=None, **kwargs):
+    """
+    statusy.W005 and statusy.W006 for the roles of the database that are not declared (made
+    in the admin or the API), with the permissions of their groups. Skipped while migrations
+    are not applied.
+    """
+    from django.apps import apps
+
+    from bazis.core.declare import migrations_complete
+
+    declared = _declared_roles()
+    roles: dict[str, set[str]] = {}
+    for using in databases or ():
+        if not migrations_complete(using):
+            continue
+        for role, slug in (
+            apps.get_model('permit.Role')
+            .objects.using(using)
+            .filter(groups_permission__permissions__slug__contains='.item.add.')
+            .exclude(slug__in=list(declared))
+            .values_list('slug', 'groups_permission__permissions__slug')
+            .distinct()
+        ):
+            roles.setdefault(role, set()).add(slug)
+    return add_status_messages(roles, 'the database')
