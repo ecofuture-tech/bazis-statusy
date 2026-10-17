@@ -39,8 +39,8 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "bazis-test-utils>=2.3.0",
-    "bazis-author>=2.3.0",
+    "bazis-test-utils>=2.5.2",
+    "bazis-author>=2.5.0",
 ]
 dev = [
     "ruff"
