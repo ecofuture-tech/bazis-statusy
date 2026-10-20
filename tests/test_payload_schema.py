@@ -53,8 +53,7 @@ def _payload_type():
         actions_before=['before_dt_approved'],
         actions_after=['after_child_entities'],
     )
-    # the class stands in for an object, as in the contract export of bazis-front
-    return ParentEntity.transit_payload_type(ParentEntity, transit)
+    return ParentEntity.get_transit_payload_type(transit)
 
 
 def test_payload_schemas_of_the_core():
@@ -147,3 +146,23 @@ def test_required_text_of_the_payload_is_stripped(monkeypatch):
     item.transit_validation(transit, None, {'reason': '  too late  '})
     item.transit_validation(transit, None, ReasonPayload(reason=' x '))
     assert received == ['too late', 'x']
+
+
+def test_payload_type_of_a_transit_without_payload_is_none():
+    transit = Transit(id='no_payload', validators=[], actions_before=[], actions_after=[])
+
+    assert ParentEntity.get_transit_payload_type(transit) is None
+
+
+@pytest.mark.django_db
+def test_instance_method_uses_the_class_method(monkeypatch):
+    """
+    A model changes the payload type of a transit in one place, the class method: the
+    instance method (transit_apply, state_actions) follows it.
+    """
+    marker = object()
+    monkeypatch.setattr(
+        ParentEntity, 'get_transit_payload_type', classmethod(lambda cls, transit: marker)
+    )
+
+    assert ParentEntity().transit_payload_type(Transit(id='x')) is marker

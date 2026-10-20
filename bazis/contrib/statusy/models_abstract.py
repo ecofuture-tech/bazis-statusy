@@ -441,13 +441,23 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
 
     def transit_payload_type(self, transit: TransitBase) -> type[BaseModel] | None:
         """
-        Build a combined schema for the payload for the transition
+        The payload type of the transition for the object: see `get_transit_payload_type`
+        """
+        return self.get_transit_payload_type(transit)
+
+    @classmethod
+    def get_transit_payload_type(cls, transit: TransitBase) -> type[BaseModel] | None:
+        """
+        Build a combined schema for the payload for the transition from the model class,
+        without an object (the contract export, the documentation): the validators and the
+        actions are read from the class, their `payload` annotations do not depend on an object
         :param transit:
-        :return:
+        :return: One model inheriting the payload models of all the methods of the transit,
+            None if none of them annotates `payload`
         """
         payload_types = []
         for action_name in transit.validators + transit.actions_before + transit.actions_after:
-            if action_func := getattr(self, action_name, None):
+            if action_func := getattr(cls, action_name, None):
                 if callable(action_func):
                     if payload_param := get_func_sig_param(action_func, 'payload'):
                         payload_type = payload_param.annotation
