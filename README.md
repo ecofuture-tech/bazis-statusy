@@ -690,6 +690,27 @@ If a `state_actions` element is represented as an array (not an object), this me
 - When requesting an entity, only actions directly related to it are returned
 - To get information about related objects, request their endpoints separately
 
+#### for_transit (list only)
+
+The transits the user may make on each object of the page, by its id (bazis-statusy 2.13):
+those of his transit permissions whose selector and status the object matches that start
+from its status, the same as the transits of `state_actions` of the item. The ids are
+sorted; an object without a transit is left out. The validators are not called (a transit
+listed may still be refused with 422; `state_actions` gives their `restricts`). It costs one
+query per condition of the transit permissions of the role that can give a transit from a
+status of the page, not one per object.
+
+```json
+{
+  "meta": {
+    "for_transit": {
+      "3f0c...": ["cancel", "complete"],
+      "9a41...": ["complete"]
+    }
+  }
+}
+```
+
 #### status_aggs (list only)
 
 Aggregation of object count by statuses: the objects of the list the user can view, with

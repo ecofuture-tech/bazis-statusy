@@ -164,6 +164,9 @@ msgstr ""
 msgid "Number of elements by status"
 msgstr ""
 
+msgid "Available transits"
+msgstr ""
+
 #: routes_abstract.py:300
 msgid "Allowed statuses"
 msgstr ""

@@ -166,6 +166,9 @@ msgstr "Действия состояния объекта"
 msgid "Number of elements by status"
 msgstr "Кол-во элементов по статусам"
 
+msgid "Available transits"
+msgstr "Доступные переходы"
+
 #: routes_abstract.py:300
 msgid "Allowed statuses"
 msgstr "Допустимые статусы"

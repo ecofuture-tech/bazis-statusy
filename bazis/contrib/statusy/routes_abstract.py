@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import defaultdict
 from copy import copy
 from functools import partial
 from itertools import chain
@@ -58,6 +59,7 @@ from bazis.core.schemas.enums import RouteKind
 from bazis.core.services.includes import include_to_list
 from bazis.core.utils.functools import ExcIntercept, get_attr
 from bazis.core.utils.imp import import_class
+from bazis.core.utils.query_complex import QueryToOrm
 
 from . import TransitError, schemas
 from .models_abstract import StatusyChildMixin, StatusyMixin
@@ -343,6 +345,47 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
         return {
             it['status']: it['_count'] for it in qs.values('status').annotate(_count=Count('*'))
         }
+
+    @meta_field([CrudApiAction.LIST], title=_('Available transits'), alias='for_transit')
+    def for_transit(self) -> dict[str, list[str]]:
+        """
+        The transits the user may make on the objects of the page, by their pk (the ids
+        sorted): `allow_transits` of each object, the transit permissions whose selector and
+        status it matches that start from its status. The validators are not called (their
+        `restricts` are in `state_actions` of the item); an object without a transit is left
+        out. One query per distinct condition of the permissions that can give a transit
+        from a status of the page, not one per object.
+        """
+        handler = self.inject.permit.handler(StatusyAccessAction.TRANSIT, self.model)
+        if not handler.perms_item:
+            return {}
+
+        status_by_pk = {it.pk: it.status_id for it in self.list()}
+        transits_from = defaultdict(set)
+        for transit_id, status_id in self.model.get_model_transits().values_list(
+            'id', 'status_src_id'
+        ):
+            transits_from[status_id].add(transit_id)
+        transits_page = set().union(*(transits_from[it] for it in set(status_by_pk.values())))
+
+        # the transit ids of each condition (the selector and the status of the permissions)
+        groups = defaultdict(set)
+        for perm, cond in handler.perms_item:
+            groups[cond] |= perm.keys() & transits_page
+
+        allowed = defaultdict(set)
+        for cond, transit_ids in groups.items():
+            if not transit_ids:
+                continue
+            pks = status_by_pk.keys()
+            if cond:
+                pks = QueryToOrm.qs_apply(
+                    self.model.objects.filter(pk__in=pks), cond
+                ).values_list('pk', flat=True)
+            for pk in pks:
+                allowed[pk] |= transit_ids & transits_from[status_by_pk[pk]]
+
+        return {str(pk): sorted(allowed[pk]) for pk in status_by_pk if allowed[pk]}
 
     @meta_field([CrudApiAction.LIST], title=_('Allowed statuses'), alias='status_allowed')
     def status_allowed(self) -> list[str]:

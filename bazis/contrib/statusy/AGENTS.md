@@ -16,7 +16,7 @@ Rules.
 | Setup | you give a model statuses: `StatusyMixin`, `StatusyRouteSetBase`, the migrations, the initial status, the public catalog router, the permissions by status, the status of a create (`statusy.W005`, `W006`) |
 | Workflows in the code (`workflow.py`) | you declare the statuses and transits of a model: `Workflow`, `Status`, `Transit`, `initial=`, what `migrate` applies, the checks `statusy.E001`–`E004`, `W003`, `W004` |
 | Validators, actions and the payload | you write the methods of a transit: `transit_validator`, `transit_before`, `transit_after`, `TransitError`, the payload type, a required text, the titles of its fields |
-| API of a StatusyRouteSetBase route | a client makes a transit: `POST /{item_id}/transit/` and its answers, `schema_transit`, a transit for anonymous users, the meta `state_actions`, `status_aggs` |
+| API of a StatusyRouteSetBase route | a client makes a transit: `POST /{item_id}/transit/` and its answers, `schema_transit`, a transit for anonymous users, the meta `state_actions`, `for_transit`, `status_aggs` |
 | Transits in code and the history | the code makes a transit: `get_transit`, `transit_apply` and its payload, the actor of a system transit, an automatic transit on create, the history and `status_history` |
 | Rules | before you write the code, once: the status changes only by transits, the routes, `StatusyChildMixin` and the validation of the children, `validate_item` on a transit |
 | Statuses and transits as data | the statuses and transits are rows made in the admin or a data migration: `Status`, `Transit`, `StatusyContentType` |
@@ -246,10 +246,15 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
   Declare `default_route = True` on the main route of the model (a second route set of a
   model, see the guide of the core).
 - Meta: `state_actions` (retrieve: allowed transits, their body and `restricts` = the
-  validator errors), `status_aggs` (list: the counts by status of the visible objects with
-  the filter of the request without `status` and the search, applied by the services of
-  the route as the list does, so restricted to what the route shows) and `status_allowed`
-  (list).
+  validator errors), `for_transit` (list, bazis-statusy 2.13: the transits the user may make
+  on each object of the page, `{"<pk>": ["<transit id>", ...]}`, the ids sorted, an object
+  without one left out; the transit permissions by selector and status from the status of
+  the object, as `state_actions`, without calling the validators: a transit it lists may
+  still be refused with 422; one query per condition of the permissions, not per object;
+  a board shows the transits of a card by it), `status_aggs` (list: the counts by status of
+  the visible objects with the filter of the request without `status` and the search,
+  applied by the services of the route as the list does, so restricted to what the route
+  shows) and `status_allowed` (list).
 
 ## Transits in code and the history
 
