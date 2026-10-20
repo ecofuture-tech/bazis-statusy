@@ -102,6 +102,11 @@ def test_anonymous_state_actions(sample_app, guest_transit):
         assert [
             it['endpoint']['body']['properties']['transit']['default'] for it in state_actions
         ] == expected
+        # the title of the body of a transit without a payload is the same on every Python
+        # (`dict | None` is named `Union` on 3.14 and has no name on 3.12 and 3.13)
+        assert [it['endpoint']['body']['title'] for it in state_actions] == [
+            'DictOrNone_body_type' for _ in expected
+        ]
 
 
 def test_openapi(sample_app):

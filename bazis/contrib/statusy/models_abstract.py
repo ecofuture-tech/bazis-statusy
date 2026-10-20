@@ -463,12 +463,12 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
 
         # deduplicate types
         payload_types = tuple(set(payload_types))
-        payload_types_names = sorted([str(id(cl)) for cl in payload_types])
+        payload_types_names = sorted(cl.__name__ for cl in payload_types)
         # return the resulting class: its JSON schema has the lazy titles of the fields in the
         # active language. Its texts are stripped before their length is checked, as the
         # forms of Django do: a required text (`min_length=1`) of only spaces is refused
         return type(
-            'PayloadType_' + ''.join(payload_types_names),
+            'PayloadType_' + '_'.join(payload_types_names),
             (*payload_types, TranslatedSchemaModel),
             {'model_config': ConfigDict(str_strip_whitespace=True)},
         )
