@@ -37,6 +37,8 @@ from bazis.contrib.users import get_user_model
 User = get_user_model()
 
 URL = '/api/v1/entity/parent_entity/'
+#: the route set that declares the transit again with public=True
+GUEST_URL = '/api/v1/entity/parent_entity_guest/'
 NAME = to_attribute('name')
 
 #: draft -> check (to_check), draft -> cancel (to_cancel), check -> active (to_active);
@@ -101,9 +103,9 @@ def entity(name, status, author=None):
     )
 
 
-def for_transit(sample_app, user=None, **params):
+def for_transit(sample_app, user=None, url=URL, **params):
     response = get_api_client(sample_app, user.jwt_build() if user else None).get(
-        URL, params={'meta': 'for_transit', 'page[limit]': 100, **params}
+        url, params={'meta': 'for_transit', 'page[limit]': 100, **params}
     )
     assert response.status_code == 200, response.text
     return response.json()['meta']['for_transit']
@@ -212,20 +214,39 @@ def test_for_transit_without_permission(sample_app, workflow):
     assert str(item.pk) not in for_transit(sample_app, editor)
 
 
-@pytest.mark.django_db(transaction=True)
-def test_for_transit_anonymous(sample_app, workflow):
-    """The roles for anonymous users give the anonymous user his transits as to any user."""
+@pytest.fixture
+def guest(workflow):
+    """A role for anonymous users with `to_check` from `draft`; a draft and a checked entity."""
     statuses, __ = workflow
     group = GroupPermission.objects.create(slug='guest', **{NAME: 'guest'})
     for it in (VIEW, 'entity.parent_entity.item.transit.all.draft.to_check'):
         group.permissions.add(Permission.objects.get_or_create(slug=it)[0])
     role = Role.objects.create(slug='guest', for_anonymous=True, **{NAME: 'guest'})
     role.groups_permission.add(group)
-
-    draft = entity('draft', statuses['draft'])
     entity('checked', statuses['check'])
+    return entity('draft', statuses['draft'])
 
-    assert for_transit(sample_app) == {str(draft.pk): ['to_check']}
+
+@pytest.mark.django_db(transaction=True)
+def test_for_transit_anonymous_main_route(sample_app, guest):
+    """
+    The transit of the main route set is not public: it refuses an anonymous user (403)
+    whatever his role, so he gets no transit there.
+    """
+    assert for_transit(sample_app) == {}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_for_transit_anonymous_guest_route(sample_app, guest):
+    """
+    A route set that declares the transit with `public=True` gives the anonymous user the
+    transits of the roles for anonymous users, those its transit accepts.
+    """
+    assert for_transit(sample_app, url=GUEST_URL) == {str(guest.pk): ['to_check']}
+    response = get_api_client(sample_app).post(
+        f'{GUEST_URL}{guest.pk}/transit/', json_data={'transit': 'to_check'}
+    )
+    assert response.status_code == 200, response.text
 
 
 @pytest.mark.django_db(transaction=True)

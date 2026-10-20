@@ -85,6 +85,25 @@ def test_anonymous_transit(sample_app, guest_transit):
     assert response.status_code == 403
 
 
+@pytest.mark.django_db(transaction=True)
+def test_anonymous_state_actions(sample_app, guest_transit):
+    """
+    `state_actions` lists what the transit of the route set accepts: none for an anonymous
+    user on the main route set (its transit is not public), the transits of the roles for
+    anonymous users on the route set that declares it with `public=True`.
+    """
+    client = get_api_client(sample_app)
+    for prefix, expected in (('parent_entity', []), ('parent_entity_guest', ['to_check'])):
+        response = client.get(
+            f'/api/v1/entity/{prefix}/{guest_transit.pk}/', params={'meta': 'state_actions'}
+        )
+        assert response.status_code == 200, response.text
+        state_actions = response.json()['meta']['state_actions']
+        assert [
+            it['endpoint']['body']['properties']['transit']['default'] for it in state_actions
+        ] == expected
+
+
 def test_openapi(sample_app):
     paths = sample_app.openapi()['paths']
     schema = paths['/api/v1/entity/parent_entity/{item_id}/schema_transit/']['get'][OPENAPI_EXTENSION]

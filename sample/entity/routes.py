@@ -59,13 +59,14 @@ class ParentEntityRouteSet(StatusyRouteSetBase):
 
 class ParentEntityGuestRouteSet(StatusyRouteSetBase):
     """
-    The transits of the parent entities open to anonymous users (with the transit
+    The parent entities with their transits open to anonymous users (with the transit
     permissions of the roles for anonymous users): the transit declared again with
-    `public=True`.
+    `public=True`; the list and the item give the anonymous user his transits
+    (`for_transit`, `state_actions`).
     """
 
     model = apps.get_model('entity.ParentEntity')
-    actions = ['action_transit']
+    actions = ['action_list', 'action_retrieve', 'action_transit']
 
     @classmethod
     def get_url_prefix(cls) -> str:

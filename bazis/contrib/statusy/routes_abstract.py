@@ -201,12 +201,24 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
                 route = import_class(route, cls.__module__)
             cls._routes_child_dict[route.model] = route
 
+    def transit_open(self, item_or_model) -> bool:
+        """
+        Whether `POST /{item_id}/transit/` of this route set takes the user, as its
+        `route_check` decides from the declaration of `action_transit` of the class: an
+        anonymous user only where it is declared `public=True` (a guest route set). The
+        transit permissions of his role decide the transits then.
+        """
+        return self.action_allowed(type(self).action_transit, item_or_model)
+
     @cached_property
     def allow_transits(self) -> list[str]:
         """
         List of allowed transitions for the current user. Takes into account the current state of the object
-        and the user's permissions.
+        and the user's permissions, and whether the transit of this route set takes him
+        (`transit_open`).
         """
+        if not self.transit_open(self.item):
+            return []
         permit_handler = self.inject.permit.handler(StatusyAccessAction.TRANSIT, self.item)
         if not permit_handler.check_access():
             return []
@@ -350,13 +362,16 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
     def for_transit(self) -> dict[str, list[str]]:
         """
         The transits the user may make on the objects of the page, by their pk (the ids
-        sorted): `allow_transits` of each object (what the transit endpoint accepts; unlike
-        `state_actions`, the children of a `TransitRelation` are kept), the transit
-        permissions whose selector and status it matches that start from its status. The
+        sorted): `allow_transits` of each object, what the transit endpoint of this route
+        set accepts (`transit_open`; the children of a `TransitRelation` are listed too,
+        `state_actions` shows them under their parent), the transit permissions whose
+        selector and status it matches that start from its status. The
         validators are not called (their `restricts` are in `state_actions` of the item); an
         object without a transit is left out. One query per distinct condition of the
         permissions that can give a transit from a status of the page, not one per object.
         """
+        if not self.transit_open(self.model):
+            return {}
         handler = self.inject.permit.handler(StatusyAccessAction.TRANSIT, self.model)
         if not handler.perms_item:
             return {}

@@ -248,15 +248,19 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
 - Meta: `state_actions` (retrieve: allowed transits, their body and `restricts` = the
   validator errors), `for_transit` (list, bazis-statusy 2.13: the transits the user may make
   on each object of the page, `{"<pk>": ["<transit id>", ...]}`, the ids sorted, an object
-  without one left out; `allow_transits` of the object, what the transit endpoint accepts:
-  the transit permissions by selector and status from the status of the object, while
-  `state_actions` also leaves out the transits that are the child of a `TransitRelation`;
-  the validators are not called: a transit it lists may
-  still be refused with 422; one query per condition of the permissions, not per object;
-  a board shows the transits of a card by it), `status_aggs` (list: the counts by status of
-  the visible objects with the filter of the request without `status` and the search,
-  applied by the services of the route as the list does, so restricted to what the route
-  shows) and `status_allowed` (list).
+  without one left out; `allow_transits` of the object, what the transit endpoint of the
+  route set accepts: the transit permissions by selector and status from the status of the
+  object; the validators are not called: a transit it lists may still be refused with 422;
+  one query per condition of the permissions, not per object; a board shows the transits
+  of a card by it). Both list exactly what `POST /{item_id}/transit/` of the route set
+  takes: on a route set whose `action_transit` is not public, an anonymous user gets no
+  transit in `state_actions` nor in `for_transit` (bazis-statusy 2.13); on a route set that
+  declares it `public=True`, those of the roles for anonymous users. `for_transit` lists
+  the child transits of a `TransitRelation` too; `state_actions` shows them nested under
+  their parent.
+- Meta `status_aggs` (list: the counts by status of the visible objects with the filter of
+  the request without `status` and the search, applied by the services of the route as the
+  list does, so restricted to what the route shows) and `status_allowed` (list).
 
 ## Transits in code and the history
 
