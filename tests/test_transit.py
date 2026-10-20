@@ -253,8 +253,9 @@ def test_transit(sample_app):
         # named after the payload models, not after their ids (they change on every start)
         assert body['title'] == 'PayloadType_ParentEntityBeforeSchema_ParentEntityValidatedSchema_body_type'
         [payload] = body['$defs'].values()
-        # the fields follow the sorted payload models: the same schema on every start
-        assert list(payload['properties']) == ['must_active', 'dt_approved']
+        # the fields follow the sorted payload models: the same schema on every start (the
+        # client sends `secret` too, it is only left out of the stored payload)
+        assert list(payload['properties']) == ['must_active', 'dt_approved', 'secret']
         assert payload['required'] == ['must_active', 'dt_approved']
         assert payload['properties']['dt_approved']['title'] == title
 

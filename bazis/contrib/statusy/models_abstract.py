@@ -647,7 +647,15 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
 
         with defer_validate_item(self, source='transit', user=user, savepoint=False):
             # create the actual transition object in the context of the current object
-            statusy_transit = self.create_statusy_transit(transit, user)
+            statusy_transit = self.create_statusy_transit(
+                transit,
+                user,
+                extra=(
+                    {'payload': payload_obj.model_dump(mode='json', by_alias=True)}
+                    if isinstance(payload_obj, BaseModel)
+                    else {}
+                ),
+            )
 
             # execute custom "before" logic
             for action_name in transit.actions_before:
@@ -669,7 +677,7 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
             return instance
 
     # set object status
-    def create_statusy_transit(self, transit: TransitBase, author):
+    def create_statusy_transit(self, transit: TransitBase, author, extra: dict | None = None):
         # an anonymous user (a public transit) is no author
         if author is not None and author.is_anonymous:
             author = None
@@ -678,6 +686,7 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
             status=transit.status_dst,
             dt=now(),
             author=author,
+            extra=extra or {},
         )
 
 

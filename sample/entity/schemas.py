@@ -26,3 +26,5 @@ class ParentEntityValidatedSchema(BaseModel):
 class ParentEntityBeforeSchema(BaseModel):
     # a lazy title: translated in the language of each JSON schema (a msgid of the package)
     dt_approved: datetime = Field(title=_('Status timestamp'))
+    #: not kept in the history of the transit (`exclude`)
+    secret: str | None = Field(None, exclude=True)

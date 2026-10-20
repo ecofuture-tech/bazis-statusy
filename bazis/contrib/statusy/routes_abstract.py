@@ -65,6 +65,9 @@ from . import TransitError, schemas
 from .models_abstract import StatusyChildMixin, StatusyMixin
 from .schemas import (
     StateActionEndpointSchema,
+    StatusHistoryRecordSchema,
+    StatusHistoryResponseSchema,
+    StatusHistoryTransitSchema,
     StatusyAccessAction,
     StatusyApiAction,
     TransitActionEndpointBodySchema,
@@ -269,6 +272,35 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
             return Response(status_code=204)
         else:
             return self.get_item(item_id)
+
+    @http_get(
+        '/{item_id}/status_history/',
+        response_model=StatusHistoryResponseSchema,
+        kind=RouteKind.OTHER,
+        access_action=StatusyAccessAction.HISTORY,
+    )
+    def action_status_history(self, item_id: str, **kwargs):
+        """
+        The transits of the item, the oldest first, for whoever has the `history` permission
+        of the item (an item the user cannot view is 404 first).
+        """
+        author_type = apps.get_model(settings.AUTH_USER_MODEL).get_resource_label()
+        records = self.set_item(item_id).statusy_transits.select_related('transit')
+        return StatusHistoryResponseSchema(
+            data=[
+                StatusHistoryRecordSchema(
+                    transit=StatusHistoryTransitSchema(id=it.transit_id, name=it.transit.name),
+                    status_src=it.transit.status_src_id,
+                    status_dst=it.status_id,
+                    dt=it.dt,
+                    author=(
+                        {'id': str(it.author_id), 'type': author_type} if it.author_id else None
+                    ),
+                    payload=it.extra.get('payload'),
+                )
+                for it in records.order_by('dt', 'pk')
+            ]
+        )
 
     def _build_transits_schemas(self, transits_related, is_nested=False):
         for transit, item_selector in transits_related:

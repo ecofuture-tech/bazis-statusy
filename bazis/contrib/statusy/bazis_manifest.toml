@@ -8,7 +8,7 @@ solves = [
     "a workflow of an object: statuses and the allowed transitions between them",
     "validate an object and run actions on a status change",
     "who may perform which transition from which status (bazis-permit)",
-    "the history of status changes",
+    "the history of status changes, with the payload of each transit, in the API",
 ]
 requires = ["bazis", "bazis-users", "bazis-permit"]
 pairs_well = ["bazis-author", "bazis-bulk"]
@@ -97,6 +97,9 @@ text = "titles of payload fields stay lazy: Field(title=gettext_lazy(...)), neve
 
 [[pitfalls]]
 text = "transit_apply() in code checks no permissions and makes only a transit from the current status: take it with item.get_transit(id)"
+
+[[pitfalls]]
+text = "the validated payload of a transit is kept in its history record (extra['payload']) and read with the item.history permission: GET /{item_id}/status_history/; keep no secret in it or mark the field Field(exclude=True)"
 
 [[pitfalls]]
 text = "a transit the system makes passes user None to transit_apply, not the user of the request"

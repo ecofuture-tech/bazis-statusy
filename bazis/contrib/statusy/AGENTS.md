@@ -16,7 +16,7 @@ Rules.
 | Setup | you give a model statuses: `StatusyMixin`, `StatusyRouteSetBase`, the migrations, the initial status, the public catalog router, the permissions by status, the status of a create (`statusy.W005`, `W006`) |
 | Workflows in the code (`workflow.py`) | you declare the statuses and transits of a model: `Workflow`, `Status`, `Transit`, `initial=`, what `migrate` applies, the checks `statusy.E001`–`E004`, `W003`, `W004` |
 | Validators, actions and the payload | you write the methods of a transit: `transit_validator`, `transit_before`, `transit_after`, `TransitError`, the payload type, a required text, the titles of its fields |
-| API of a StatusyRouteSetBase route | a client makes a transit: `POST /{item_id}/transit/` and its answers, `schema_transit`, a transit for anonymous users, the meta `state_actions`, `for_transit`, `status_aggs` |
+| API of a StatusyRouteSetBase route | a client makes a transit: `POST /{item_id}/transit/` and its answers, `schema_transit`, a transit for anonymous users, the meta `state_actions`, `for_transit`, `status_aggs`, `GET /{item_id}/status_history/` |
 | Transits in code and the history | the code makes a transit: `get_transit`, `transit_apply` and its payload, the actor of a system transit, an automatic transit on create, the history and `status_history` |
 | Rules | before you write the code, once: the status changes only by transits, the routes, `StatusyChildMixin` and the validation of the children, `validate_item` on a transit |
 | Statuses and transits as data | the statuses and transits are rows made in the admin or a data migration: `Status`, `Transit`, `StatusyContentType` |
@@ -224,6 +224,10 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
   declares it again with `public=True` (below).
 - `GET /{item_id}/schema_transit/`: the schema the object must satisfy before a transit with
   `is_schema_validate` (default true); kind `schema` in `x-bazis` (bazis-statusy 2.12).
+- `GET /{item_id}/status_history/` (bazis-statusy 2.15): the history of the item, below
+  (The history in the API). Kind `other` in `x-bazis`, `access_action` `history`: the permission
+  `shop.order.item.history.<selector>.<status>` (like `transit`), granted by the roles that
+  may read the history; the item must be visible too.
 - A transit for anonymous users (a guest request, a public form): a route of its own that
   declares the transit again with `public=True` (`route_declare` of the core; limited by
   `BAZIS_THROTTLE_PUBLIC` per user or IP address, or by
@@ -316,15 +320,41 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
                   item.transit_apply(transit, None)
   ```
 
+- The payload of a transit is kept in its history record (bazis-statusy 2.15): the
+  validated payload (`model_dump(mode='json', by_alias=True)` of the payload type), under
+  `extra['payload']`; a transit without a payload type, or a record made before 2.15,
+  has none. **Whoever has the `history` permission reads the payload** (the route below):
+  keep no secret in it, or exclude the field from the dump, `Field(exclude=True)` of the
+  payload model: sent as a dict (the endpoint) it is validated and passed to the actions,
+  but not stored; a payload model instance passed to `transit_apply` loses it before the
+  validation, so pass a dict there. No migration: `extra` is the field of the record.
 - The history: `item.statusy_transits` (the model `<Model>StatusyTransit` of the app), one
   record per transit with `transit`, `status` (the new one), `dt`, `author` and `extra`
-  (JSON, `{}`); order it by `dt`. `StatusyAdminMixin` shows it in the admin. A status
+  (JSON; `{"payload": {...}}` for a transit made with a payload, else `{}`; an action
+  may add keys of its own, not touch `payload`); order it by `dt`. `StatusyAdminMixin` shows it in the admin. A status
   written without a transit (`QuerySet.update(status=...)` in test data) has no record.
 
 ### The history in the API: `status_history`
 
-The history model is not a JSON:API resource and has no route. `StatusyMixin` has the
-calculated field `status_history` (bazis-statusy 2.12): the transits of the item, the
+The history model is not a JSON:API resource. `GET /{item_id}/status_history/` of
+`StatusyRouteSetBase` (bazis-statusy 2.15) returns it with the names and the payload, a
+plain JSON document, not a JSON:API one:
+
+```json
+{"data": [{"transit": {"id": "to_paid", "name": "Pay"}, "status_src": "draft",
+           "status_dst": "paid", "dt": "2026-03-01T10:00:00Z",
+           "author": {"id": "<user id>", "type": "users.user"}, "payload": {"dt_closed": "..."}}]}
+```
+
+The oldest first; `author` is null for a transit of the system, `payload` null for a
+transit without one. It needs the permission `item.history` of the item (selector and status, as the other
+item permissions); an item the user cannot view is 404 first, as at its retrieve, a user
+without `history` is 403. The permission is its own, not `view`, because the history
+shows data the field permissions of the item may hide (the payloads, the statuses): grant
+it only to the roles that may read them. A route set that should not give it lists its
+`actions` without `action_status_history`.
+
+`StatusyMixin` also has the calculated field `status_history` (bazis-statusy 2.12): the transits of the item, the
 oldest first, each `{"transit": "<transit id>", "status": "<status id>", "dt": "<ISO
 time>", "author": "<user id>" | null}` (null for a transit of the system). A route shows it
 with `include` (fetched in the query of the route, one subquery, for a list too):

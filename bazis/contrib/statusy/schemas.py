@@ -32,6 +32,8 @@ payload_validate_none = object()
 
 class StatusyAccessAction(AccessAction):
     TRANSIT = 'transit'
+    #: reading the history of the transits with their payloads (`GET /{item_id}/status_history/`)
+    HISTORY = 'history'
 
 
 class StatusyApiAction(ApiAction):
@@ -69,6 +71,30 @@ class StatusHistoryEntry(BaseModel):
     status: str
     dt: datetime
     author: str | int | None = None
+
+
+class StatusHistoryTransitSchema(BaseModel):
+    id: str
+    name: str
+
+
+class StatusHistoryRecordSchema(BaseModel):
+    """
+    A transit of the item in `GET /{item_id}/status_history/`: the transit (its id and
+    name), the statuses it went from and to, its time, its author (None for a transit of
+    the system) and the payload it was made with (None without one).
+    """
+
+    transit: StatusHistoryTransitSchema
+    status_src: str
+    status_dst: str
+    dt: datetime
+    author: CommonResourceSchema | None = None
+    payload: dict | None = None
+
+
+class StatusHistoryResponseSchema(BaseModel):
+    data: list[StatusHistoryRecordSchema]
 
 
 class StateActionEndpointSchema(BaseModel):
