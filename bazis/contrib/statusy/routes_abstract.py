@@ -350,11 +350,12 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
     def for_transit(self) -> dict[str, list[str]]:
         """
         The transits the user may make on the objects of the page, by their pk (the ids
-        sorted): `allow_transits` of each object, the transit permissions whose selector and
-        status it matches that start from its status. The validators are not called (their
-        `restricts` are in `state_actions` of the item); an object without a transit is left
-        out. One query per distinct condition of the permissions that can give a transit
-        from a status of the page, not one per object.
+        sorted): `allow_transits` of each object (what the transit endpoint accepts; unlike
+        `state_actions`, the children of a `TransitRelation` are kept), the transit
+        permissions whose selector and status it matches that start from its status. The
+        validators are not called (their `restricts` are in `state_actions` of the item); an
+        object without a transit is left out. One query per distinct condition of the
+        permissions that can give a transit from a status of the page, not one per object.
         """
         handler = self.inject.permit.handler(StatusyAccessAction.TRANSIT, self.model)
         if not handler.perms_item:

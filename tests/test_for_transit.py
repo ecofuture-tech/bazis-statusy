@@ -127,7 +127,8 @@ def test_for_transit_by_selector_and_status(sample_app, workflow):
     }
     assert for_transit(sample_app, editor) == expected
 
-    # the transits of the item (state_actions)
+    # the transits of the item (state_actions: no transit here is the child of a
+    # TransitRelation, which it would leave out)
     for item in (own_draft, other_draft, checked):
         response = get_api_client(sample_app, editor.jwt_build()).get(
             f'{URL}{item.pk}/', params={'meta': 'state_actions'}
@@ -148,6 +149,47 @@ def test_for_transit_by_selector_and_status(sample_app, workflow):
         str(checked.pk): ['to_active']
     }
     assert for_transit(sample_app, editor, filter='status=active') == {}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_for_transit_conditions_of_one_transit(sample_app, workflow):
+    """
+    Several permissions of the groups of a role give one transit under different conditions:
+    the object gets it once if it matches any of them. A selector with the status `all`
+    gives the transits of every status of the objects it selects.
+    """
+    statuses, users = workflow
+    role = Role.objects.create(slug='overlap', **{NAME: 'overlap'})
+    for slug, permissions in (
+        (
+            'overlap_author',
+            [
+                VIEW,
+                'entity.parent_entity.item.transit.author.draft.to_check',
+                'entity.parent_entity.item.transit.author.all.to_check',
+                'entity.parent_entity.item.transit.author.all.to_active',
+            ],
+        ),
+        ('overlap_all', ['entity.parent_entity.item.transit.all.draft.to_check']),
+    ):
+        group = GroupPermission.objects.create(slug=slug, **{NAME: slug})
+        for it in permissions:
+            group.permissions.add(Permission.objects.get_or_create(slug=it)[0])
+        role.groups_permission.add(group)
+    user = User.objects.create_user('overlap', email='overlap@site.com', password='weak_1')
+    user.roles.add(role)
+
+    own_draft = entity('own draft', statuses['draft'], user)
+    other_draft = entity('other draft', statuses['draft'], users['viewer'])
+    own_checked = entity('own checked', statuses['check'], user)
+    entity('other checked', statuses['check'], users['viewer'])
+    entity('own active', statuses['active'], user)
+
+    assert for_transit(sample_app, user) == {
+        str(own_draft.pk): ['to_check'],
+        str(other_draft.pk): ['to_check'],
+        str(own_checked.pk): ['to_active'],
+    }
 
 
 @pytest.mark.django_db(transaction=True)
