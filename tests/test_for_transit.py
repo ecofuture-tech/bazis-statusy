@@ -29,7 +29,7 @@ from entity.models import ParentEntity
 from translated_fields import to_attribute
 
 from bazis.contrib.permit.models import GroupPermission, Permission, Role
-from bazis.contrib.statusy.models import Status, StatusyContentType, Transit
+from bazis.contrib.statusy.models import Status, StatusyContentType, Transit, TransitRelation
 from bazis.contrib.statusy.routes_abstract import StatusyRouteSetBase
 from bazis.contrib.users import get_user_model
 
@@ -130,15 +130,9 @@ def test_for_transit_by_selector_and_status(sample_app, workflow):
     assert for_transit(sample_app, editor) == expected
 
     # the transits of the item (state_actions: no transit here is the child of a
-    # TransitRelation, which it would leave out)
+    # TransitRelation, which it would nest under its parent)
     for item in (own_draft, other_draft, checked):
-        response = get_api_client(sample_app, editor.jwt_build()).get(
-            f'{URL}{item.pk}/', params={'meta': 'state_actions'}
-        )
-        assert response.status_code == 200
-        state_actions = response.json()['meta']['state_actions']
-        transits = sorted(it['endpoint']['body']['properties']['transit']['default'] for it in state_actions)
-        assert transits == expected.get(str(item.pk), [])
+        assert sorted(state_transits(sample_app, editor, item)) == expected.get(str(item.pk), [])
 
     # a transit permission of every status gives the transit only from its own status
     assert for_transit(sample_app, users['checker']) == {
@@ -212,6 +206,66 @@ def test_for_transit_without_permission(sample_app, workflow):
     )
     assert response.status_code == 200, response.text
     assert str(item.pk) not in for_transit(sample_app, editor)
+
+
+def state_transits(sample_app, user, item, url=URL):
+    """The transit ids of `state_actions` of the item, a nested list for a related set."""
+    response = get_api_client(sample_app, user.jwt_build() if user else None).get(
+        f'{url}{item.pk}/', params={'meta': 'state_actions'}
+    )
+    assert response.status_code == 200, response.text
+
+    def transit_id(action):
+        if isinstance(action, list):
+            return [transit_id(it) for it in action]
+        return action['endpoint']['body']['properties']['transit']['default']
+
+    return [transit_id(it) for it in response.json()['meta']['state_actions']]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_for_transit_lists_the_child_of_a_transit_relation(sample_app, workflow):
+    """
+    A transit that is the child of a `TransitRelation` is a transit of the item the transit
+    endpoint accepts: `for_transit` lists it, `state_actions` nests it under its parent.
+    """
+    statuses, users = workflow
+    editor = users['editor']
+    item = entity('own draft', statuses['draft'], editor)
+    TransitRelation.objects.create(
+        transit_parent_id='to_check', transit_child_id='to_cancel', item_selector=''
+    )
+
+    assert for_transit(sample_app, editor) == {str(item.pk): ['to_cancel', 'to_check']}
+    assert state_transits(sample_app, editor, item) == [['to_check', 'to_cancel']]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_public_transit_does_not_widen_the_role(sample_app, workflow):
+    """
+    `public=True` opens the transit of the guest route set to anonymous users; an
+    authenticated user there has the transits of his role, none without a transit permission.
+    """
+    statuses, users = workflow
+    viewer, editor = users['viewer'], users['editor']
+    other = entity('other draft', statuses['draft'], viewer)
+    own = entity('own draft', statuses['draft'], editor)
+
+    assert for_transit(sample_app, viewer, url=GUEST_URL) == {}
+    assert state_transits(sample_app, viewer, other, url=GUEST_URL) == []
+    response = get_api_client(sample_app, viewer.jwt_build()).post(
+        f'{GUEST_URL}{other.pk}/transit/', json_data={'transit': 'to_check'}
+    )
+    assert response.status_code == 403
+
+    # the transits of his role, as on the main route set
+    assert for_transit(sample_app, editor, url=GUEST_URL) == {
+        str(own.pk): ['to_cancel', 'to_check']
+    }
+    assert sorted(state_transits(sample_app, editor, own, url=GUEST_URL)) == [
+        'to_cancel',
+        'to_check',
+    ]
 
 
 @pytest.fixture
