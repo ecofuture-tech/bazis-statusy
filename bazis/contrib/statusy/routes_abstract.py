@@ -363,12 +363,13 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
         """
         The transits the user may make on the objects of the page, by their pk (the ids
         sorted): `allow_transits` of each object, what the transit endpoint of this route
-        set accepts (`transit_open`; the children of a `TransitRelation` are listed too,
-        `state_actions` shows them under their parent), the transit permissions whose
-        selector and status it matches that start from its status. The
-        validators are not called (their `restricts` are in `state_actions` of the item); an
-        object without a transit is left out. One query per distinct condition of the
-        permissions that can give a transit from a status of the page, not one per object.
+        set accepts (`transit_open`), the transit permissions whose selector and status it
+        matches that start from its status. Only the transits of the top level of
+        `state_actions`: the children of a `TransitRelation` are left out, as
+        `state_actions` shows them only under their parent. The validators are not called
+        (their `restricts` are in `state_actions` of the item); an object without a transit
+        is left out. One query per distinct condition of the permissions that can give a
+        transit from a status of the page, not one per object.
         """
         if not self.transit_open(self.model):
             return {}
@@ -378,8 +379,10 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
 
         status_by_pk = {it.pk: it.status_id for it in self.list()}
         transits_from = defaultdict(set)
-        for transit_id, status_id in self.model.get_model_transits().values_list(
-            'id', 'status_src_id'
+        for transit_id, status_id in (
+            self.model.get_model_transits()
+            .filter(transit_relations_as_child=None)
+            .values_list('id', 'status_src_id')
         ):
             transits_from[status_id].add(transit_id)
         transits_page = set().union(*(transits_from[it] for it in set(status_by_pk.values())))

@@ -695,8 +695,9 @@ If a `state_actions` element is represented as an array (not an object), this me
 The transits the user may make on each object of the page, by its id (bazis-statusy 2.13):
 those of his transit permissions whose selector and status the object matches that start
 from its status: `allow_transits` of the item, what the transit endpoint of the route set
-accepts (the child transits of a `TransitRelation` too; `state_actions` of the item shows
-them nested under their parent). On a route set whose `action_transit` is not public an
+accepts. Since bazis-statusy 2.14 it lists the transits of the top level of `state_actions`:
+the child transits of a `TransitRelation` are left out, as `state_actions` of the item shows
+them only nested under their parent. On a route set whose `action_transit` is not public an
 anonymous user gets no transit, neither in `state_actions` nor in `for_transit`; on a
 route set that declares it `public=True`, those of the roles for anonymous users. The ids are
 sorted; an object without a transit is left out. The validators are not called (a transit

@@ -224,20 +224,25 @@ def state_transits(sample_app, user, item, url=URL):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_for_transit_lists_the_child_of_a_transit_relation(sample_app, workflow):
+def test_for_transit_leaves_out_the_child_of_a_transit_relation(sample_app, workflow):
     """
-    A transit that is the child of a `TransitRelation` is a transit of the item the transit
-    endpoint accepts: `for_transit` lists it, `state_actions` nests it under its parent.
+    `for_transit` lists the transits of the top level of `state_actions`: the child of a
+    `TransitRelation` is left out, as `state_actions` shows it only under its parent.
     """
     statuses, users = workflow
     editor = users['editor']
     item = entity('own draft', statuses['draft'], editor)
-    TransitRelation.objects.create(
+    relation = TransitRelation.objects.create(
         transit_parent_id='to_check', transit_child_id='to_cancel', item_selector=''
     )
 
-    assert for_transit(sample_app, editor) == {str(item.pk): ['to_cancel', 'to_check']}
+    assert for_transit(sample_app, editor) == {str(item.pk): ['to_check']}
     assert state_transits(sample_app, editor, item) == [['to_check', 'to_cancel']]
+
+    # without the relation the child is a transit of the top level again
+    relation.delete()
+    assert for_transit(sample_app, editor) == {str(item.pk): ['to_cancel', 'to_check']}
+    assert sorted(state_transits(sample_app, editor, item)) == ['to_cancel', 'to_check']
 
 
 @pytest.mark.django_db(transaction=True)
@@ -345,6 +350,15 @@ def test_for_transit_queries(sample_app, workflow, monkeypatch):
     # a page of one status (a column of a board): no query for the conditions of the others
     assert len(for_transit(sample_app, editor, filter='status=check')) == 30
     assert counts[-1] == large - 1
+
+    # leaving out the children of a TransitRelation costs no query
+    TransitRelation.objects.create(
+        transit_parent_id='to_check', transit_child_id='to_cancel', item_selector=''
+    )
+    result = for_transit(sample_app, editor)
+    assert len(result) == 45
+    assert not any('to_cancel' in it for it in result.values())
+    assert counts[-1] == large
 
     # a user without a transit permission: no query
     counts.clear()

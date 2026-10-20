@@ -256,8 +256,9 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
   takes: on a route set whose `action_transit` is not public, an anonymous user gets no
   transit in `state_actions` nor in `for_transit` (bazis-statusy 2.13); on a route set that
   declares it `public=True`, those of the roles for anonymous users. `for_transit` lists
-  the child transits of a `TransitRelation` too; `state_actions` shows them nested under
-  their parent.
+  the transits of the top level of `state_actions` (bazis-statusy 2.14): the child
+  transits of a `TransitRelation` are left out, `state_actions` shows them only nested
+  under their parent.
 - Meta `status_aggs` (list: the counts by status of the visible objects with the filter of
   the request without `status` and the search, applied by the services of the route as the
   list does, so restricted to what the route shows) and `status_allowed` (list).
