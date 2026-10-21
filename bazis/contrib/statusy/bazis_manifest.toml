@@ -8,7 +8,7 @@ solves = [
     "a workflow of an object: statuses and the allowed transitions between them",
     "validate an object and run actions on a status change",
     "who may perform which transition from which status (bazis-permit)",
-    "the history of status changes",
+    "the history of status changes, with the payload of each transit, in the API",
 ]
 requires = ["bazis", "bazis-users", "bazis-permit"]
 pairs_well = ["bazis-author", "bazis-bulk"]
@@ -90,13 +90,16 @@ text = "validators are also called with payload_validate_none (to build state_ac
 text = "a transit of the parent validates its StatusyChildMixin children; it needs only the transit permission of the parent"
 
 [[pitfalls]]
-text = "the payload of a transit is one object with the fields of the payload models of all its validators and actions; without an object (a contract export) it is the classmethod Model.get_transit_payload_type(transit), the one to override"
+text = "the payload of a transit is one object with the fields of the payload models of all its validators and actions; without an object (a contract export) it is the classmethod Model.get_transit_payload_type(transit), the one to override (item.transit_payload_type is the same under its old name, not a hook)"
 
 [[pitfalls]]
 text = "titles of payload fields stay lazy: Field(title=gettext_lazy(...)), never str()"
 
 [[pitfalls]]
 text = "transit_apply() in code checks no permissions and makes only a transit from the current status: take it with item.get_transit(id)"
+
+[[pitfalls]]
+text = "the validated payload of a transit is kept in its history record (extra['payload']) and read with the item.history permission: GET /{item_id}/status_history/; keep no secret in it or mark the field Annotated[..., NOT_IN_HISTORY] (bazis.contrib.statusy.schemas; on the field or a member of its Optional): validated and given to the methods, not kept; a mark inside a list or a nested model is ImproperlyConfigured"
 
 [[pitfalls]]
 text = "a transit the system makes passes user None to transit_apply, not the user of the request"

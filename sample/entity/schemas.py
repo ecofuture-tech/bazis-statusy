@@ -13,10 +13,13 @@
 # limitations under the License.
 
 from datetime import datetime
+from typing import Annotated
 
 from django.utils.translation import gettext_lazy as _
 
 from pydantic import BaseModel, Field
+
+from bazis.contrib.statusy.schemas import NOT_IN_HISTORY
 
 
 class ParentEntityValidatedSchema(BaseModel):
@@ -26,3 +29,5 @@ class ParentEntityValidatedSchema(BaseModel):
 class ParentEntityBeforeSchema(BaseModel):
     # a lazy title: translated in the language of each JSON schema (a msgid of the package)
     dt_approved: datetime = Field(title=_('Status timestamp'))
+    #: not kept in the history of the transit
+    secret: Annotated[str | None, NOT_IN_HISTORY] = None

@@ -91,7 +91,8 @@ def test_transit_of_the_system(transits, calls):
         'activate',
         'active',
         None,
-        {},
+        # the status the transit started from (bazis-statusy 2.15), no payload
+        {'status_src': 'draft'},
     )
     assert [(changes.source, changes.user) for _, changes in calls] == [('transit', None)]
 
