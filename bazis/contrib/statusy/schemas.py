@@ -30,6 +30,17 @@ from bazis.core.utils.schemas import CommonResourceSchema, TranslatedSchemaModel
 payload_validate_none = object()
 
 
+class _NotInHistory:
+    def __repr__(self):
+        return 'NOT_IN_HISTORY'
+
+
+#: The mark of a field of a payload model that the history record of the transit does not
+#: keep (`secret: Annotated[str | None, NOT_IN_HISTORY] = None`): the field is validated and
+#: the methods of the transit receive it, `extra['payload']` of the record leaves it out
+NOT_IN_HISTORY = _NotInHistory()
+
+
 class StatusyAccessAction(AccessAction):
     TRANSIT = 'transit'
     #: reading the history of the transits with their payloads (`GET /{item_id}/status_history/`)
@@ -81,8 +92,10 @@ class StatusHistoryTransitSchema(BaseModel):
 class StatusHistoryRecordSchema(BaseModel):
     """
     A transit of the item in `GET /{item_id}/status_history/`: the transit (its id and
-    name), the statuses it went from and to, its time, its author (None for a transit of
-    the system) and the payload it was made with (None without one).
+    name), the statuses it went from (kept in the record; for a record made before 2.15,
+    the source status of the current definition of the transit) and to, its time, its
+    author (None for a transit of the system) and the payload it was made with (None
+    without one; the fields marked `NOT_IN_HISTORY` are not kept).
     """
 
     transit: StatusHistoryTransitSchema

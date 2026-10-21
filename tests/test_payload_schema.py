@@ -155,10 +155,9 @@ def test_payload_type_of_a_transit_without_payload_is_none():
 
 
 @pytest.mark.django_db
-def test_instance_method_uses_the_class_method(monkeypatch):
+def test_the_old_name_returns_the_class_method(monkeypatch):
     """
-    A model changes the payload type of a transit in one place, the class method: the
-    instance method (transit_apply, state_actions) follows it.
+    `transit_payload_type`, the old name of the classmethod, returns what it returns.
     """
     marker = object()
     monkeypatch.setattr(
@@ -166,3 +165,43 @@ def test_instance_method_uses_the_class_method(monkeypatch):
     )
 
     assert ParentEntity().transit_payload_type(Transit(id='x')) is marker
+
+
+@pytest.mark.django_db
+def test_the_classmethod_is_the_hook(monkeypatch):
+    """
+    A model changes the payload type of a transit in one place, the classmethod: the
+    validation of a transit (`transit_apply`, the transit endpoint) uses it.
+    """
+    monkeypatch.setattr(
+        ParentEntity, 'get_transit_payload_type', classmethod(lambda cls, transit: ReasonPayload)
+    )
+    transit = Transit(
+        id='reject', model=ContentType.objects.get_for_model(ParentEntity), validators=[]
+    )
+    item = ParentEntity()
+
+    payload = item.transit_validation(transit, None, {'reason': 'x'})
+    assert isinstance(payload, ReasonPayload)
+    assert payload.reason == 'x'
+    with pytest.raises(JsonApiBazisException) as raised:
+        item.transit_validation(transit, None, {})
+    assert raised.value.status == 422
+
+
+def test_the_class_stands_in_for_an_object():
+    """
+    bazis-front 0.6 reads the payload type of a transit with the class in place of an
+    object (`Model.transit_payload_type(Model, transit)`): the same schema as the classmethod.
+    """
+    transit = Transit(
+        id='activate',
+        validators=['validator_must_active'],
+        actions_before=['before_dt_approved'],
+        actions_after=[],
+    )
+
+    assert (
+        ParentEntity.transit_payload_type(ParentEntity, transit).model_json_schema()
+        == ParentEntity.get_transit_payload_type(transit).model_json_schema()
+    )

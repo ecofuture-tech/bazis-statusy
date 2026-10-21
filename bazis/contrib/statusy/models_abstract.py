@@ -53,7 +53,12 @@ from bazis.core.utils.orm import (
 from bazis.core.utils.schemas import TranslatedSchemaModel
 
 from . import TransitChildrenError, TransitError
-from .schemas import StatusHistoryEntry, StatusyApiAction, payload_validate_none
+from .schemas import (
+    NOT_IN_HISTORY,
+    StatusHistoryEntry,
+    StatusyApiAction,
+    payload_validate_none,
+)
 
 
 if TYPE_CHECKING:
@@ -441,7 +446,11 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
 
     def transit_payload_type(self, transit: TransitBase) -> type[BaseModel] | None:
         """
-        The payload type of the transition for the object: see `get_transit_payload_type`
+        `get_transit_payload_type` under its old name, for its callers: the code of the
+        projects (`item.transit_payload_type(transit)`) and bazis-front 0.6
+        (`Model.transit_payload_type(Model, transit)`, capabilities/statusy.py). Not a hook:
+        the package calls the classmethod only. Remove when bazis-front requires
+        bazis-statusy >= 2.15 and calls the classmethod.
         """
         return self.get_transit_payload_type(transit)
 
@@ -558,7 +567,7 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
 
         # if payload content validation is required - perform it
         if payload is not payload_validate_none:
-            if payload_type := self.transit_payload_type(transit):
+            if payload_type := self.get_transit_payload_type(transit):
                 if payload is None:
                     raise JsonApiBazisException(
                         TransitError(_('This transition requires a payload'), item=self)
@@ -645,17 +654,23 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         # reference to the current instance
         instance = self
 
+        # the record keeps the status the transit started from (the definition of the transit
+        # may change later) and the payload without the fields marked NOT_IN_HISTORY
+        extra = {'status_src': self.status_id}
+        if isinstance(payload_obj, BaseModel):
+            extra['payload'] = payload_obj.model_dump(
+                mode='json',
+                by_alias=True,
+                exclude={
+                    name
+                    for name, field in type(payload_obj).model_fields.items()
+                    if NOT_IN_HISTORY in field.metadata
+                },
+            )
+
         with defer_validate_item(self, source='transit', user=user, savepoint=False):
             # create the actual transition object in the context of the current object
-            statusy_transit = self.create_statusy_transit(
-                transit,
-                user,
-                extra=(
-                    {'payload': payload_obj.model_dump(mode='json', by_alias=True)}
-                    if isinstance(payload_obj, BaseModel)
-                    else {}
-                ),
-            )
+            statusy_transit = self.create_statusy_transit(transit, user, extra=extra)
 
             # execute custom "before" logic
             for action_name in transit.actions_before:

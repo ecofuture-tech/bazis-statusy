@@ -21,12 +21,15 @@ changes nothing.
 from datetime import UTC, datetime
 
 from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
 
 import pytest
 from entity.models import ChildEntity, ParentEntity
 from translated_fields import to_attribute
 
+from bazis.contrib.statusy import TransitError
 from bazis.contrib.statusy.models import Status, StatusyContentType, Transit
+from bazis.contrib.statusy.schemas import NOT_IN_HISTORY
 from bazis.core.errors import JsonApiBazisException
 
 
@@ -133,3 +136,65 @@ def test_payload_as_a_dict_or_a_model_instance(transits):
 
     payload = entity.transit_payload_type(activate)(must_active=True, dt_approved=approved)
     assert entity.transit_apply(activate, None, payload).status_id == 'active'
+
+
+def test_a_field_not_in_history_is_given_to_the_actions(transits, monkeypatch):
+    """
+    A field of a payload model marked `NOT_IN_HISTORY` is validated and the actions receive
+    it, from a dict and from a payload model instance; the history record does not keep it.
+    """
+    from entity.schemas import ParentEntityBeforeSchema
+
+    activate = transits['activate']
+    activate.actions_before = ['before_dt_approved']
+    activate.actions_after = ['after_secret']
+    activate.save()
+    assert NOT_IN_HISTORY in ParentEntity.get_transit_payload_type(activate).model_fields[
+        'secret'
+    ].metadata
+    received = []
+    monkeypatch.setattr(
+        ParentEntity,
+        'after_secret',
+        lambda self, statusy_transit, payload: received.append(payload.secret),
+        raising=False,
+    )
+    approved = datetime(2026, 2, 1, tzinfo=UTC)
+
+    entity = ParentEntity.objects.create(name='Entity')
+    entity = entity.transit_apply(
+        activate, None, {'dt_approved': approved.isoformat(), 'secret': 'from a dict'}
+    )
+    entity = entity.transit_apply(transits['back'], None)
+    entity.transit_apply(
+        activate, None, ParentEntityBeforeSchema(dt_approved=approved, secret='from a model')
+    )
+
+    assert received == ['from a dict', 'from a model']
+    stored = {'status_src': 'draft', 'payload': {'dt_approved': '2026-02-01T00:00:00Z'}}
+    assert [
+        it.extra for it in entity.statusy_transits.filter(transit=activate).order_by('dt')
+    ] == [stored, stored]
+
+
+def test_a_failed_transit_keeps_no_record(transits, monkeypatch):
+    """
+    An action after that fails rolls the transit back with its history record and payload.
+    """
+    activate = transits['activate']
+    activate.actions_before = ['before_dt_approved']
+    activate.actions_after = ['after_fail']
+    activate.save()
+
+    def after_fail(self, statusy_transit, payload):
+        raise TransitError('The action after failed')
+
+    monkeypatch.setattr(ParentEntity, 'after_fail', after_fail, raising=False)
+    entity = ParentEntity.objects.create(name='Entity')
+
+    with pytest.raises(TransitError), transaction.atomic():
+        entity.transit_apply(activate, None, {'dt_approved': '2026-02-01T00:00:00Z'})
+
+    entity = ParentEntity.objects.get(pk=entity.pk)
+    assert entity.status_id == 'draft'
+    assert not entity.statusy_transits.exists()

@@ -21,6 +21,8 @@ and the item must be visible.
 
 from datetime import UTC, datetime
 
+from django.utils.timezone import now
+
 import pytest
 from bazis_test_utils.utils import get_api_client
 from entity.models import ParentEntity
@@ -76,10 +78,28 @@ def setup(db):
     viewer_role = Role.objects.create(slug='viewers', **{name: 'Viewers'})
     viewer_role.groups_permission.add(viewer_group)
 
+    def history_role(slug, history):
+        # views all the items, reads the history of some
+        group = GroupPermission.objects.create(slug=slug, **{name: slug})
+        for perm in ('entity.parent_entity.item.view.all.all', history):
+            group.permissions.add(Permission.objects.get_or_create(slug=perm)[0])
+        history_role = Role.objects.create(slug=slug, **{name: slug})
+        history_role.groups_permission.add(group)
+        return history_role
+
+    roles = {
+        'author': role,
+        'other': role,
+        'viewer': viewer_role,
+        # the history of the items he is the author of
+        'reader': history_role('readers', 'entity.parent_entity.item.history.author.all'),
+        # the history of the items in draft
+        'drafter': history_role('drafters', 'entity.parent_entity.item.history.all.draft'),
+    }
     users = []
-    for username in ('author', 'other', 'viewer'):
+    for username, user_role in roles.items():
         user = get_user_model().objects.create_user(username, email=f'{username}@site.com')
-        user.roles.add(viewer_role if username == 'viewer' else role)
+        user.roles.add(user_role)
         user.refresh_from_db()
         users.append(user)
     return transits, *users
@@ -87,7 +107,7 @@ def setup(db):
 
 @pytest.mark.django_db(transaction=True)
 def test_status_history_route(sample_app, setup):
-    transits, author, other, viewer = setup
+    transits, author, other, viewer, *_ = setup
     item = ParentEntity.objects.create(
         name='Entity', author=author, dt_approved=datetime(2026, 1, 1, tzinfo=UTC)
     )
@@ -119,13 +139,31 @@ def test_status_history_route(sample_app, setup):
     assert (second['author'], second['payload']) == (None, None)
     records = list(item.statusy_transits.order_by('dt'))
     assert [datetime.fromisoformat(it['dt']) for it in (first, second)] == [r.dt for r in records]
-    assert records[0].extra == {'payload': {'dt_approved': '2026-03-01T10:00:00Z'}}
-    assert records[1].extra == {}
+    assert records[0].extra == {
+        'status_src': 'draft',
+        'payload': {'dt_approved': '2026-03-01T10:00:00Z'},
+    }
+    assert records[1].extra == {'status_src': 'active'}
 
     # a transit of the code keeps its payload the same way
     ParentEntity.objects.get(pk=item.pk).transit_apply(transits['activate'], None, PAYLOAD)
     last = client.get(url).json()['data'][-1]
     assert last['payload'] == {'dt_approved': '2026-03-01T10:00:00Z'}
+
+    # the definition of the transit changes (a migrate of workflow.py): a record shows the
+    # status the transit started from; a record made before 2.15 keeps none and shows the
+    # source status of the current definition
+    Transit.objects.filter(pk='activate').update(status_src='active')
+    item.statusy_transits.create(
+        transit=transits['activate'], status_id='active', dt=now(), extra={}
+    )
+    data = client.get(url).json()['data']
+    assert [(it['transit']['id'], it['status_src'], it['payload'] is None) for it in data] == [
+        ('activate', 'draft', False),
+        ('back', 'active', True),
+        ('activate', 'draft', False),
+        ('activate', 'active', True),
+    ]
 
     # the permission to view the item is not the one to read its history
     viewer_client = get_api_client(sample_app, viewer.jwt_build())
@@ -134,8 +172,32 @@ def test_status_history_route(sample_app, setup):
 
     # an item the user does not view is not found, as at its retrieve
     assert get_api_client(sample_app, other.jwt_build()).get(url).status_code == 404
-    anonymous = get_api_client(sample_app, None)
-    assert anonymous.get(url).status_code == anonymous.get(f'{URL}{item.pk}/').status_code
+    assert get_api_client(sample_app, None).get(url).status_code == 404
+
+
+@pytest.mark.django_db(transaction=True)
+def test_status_history_permission(sample_app, setup):
+    """
+    The `history` permission of the item, by its selector and its status: a user who views
+    the item may still not read its history.
+    """
+    transits, author, _other, _viewer, reader, drafter = setup
+    item = ParentEntity.objects.create(
+        name='Entity', author=author, dt_approved=datetime(2026, 1, 1, tzinfo=UTC)
+    )
+    url = f'{URL}{item.pk}/status_history/'
+
+    # the history of the items he is the author of: not of this one
+    reader_client = get_api_client(sample_app, reader.jwt_build())
+    assert reader_client.get(f'{URL}{item.pk}/').status_code == 200
+    assert reader_client.get(url).status_code == 403
+
+    # the history of the items in draft: while the item is in draft
+    drafter_client = get_api_client(sample_app, drafter.jwt_build())
+    assert drafter_client.get(url).status_code == 200
+    ParentEntity.objects.get(pk=item.pk).transit_apply(transits['activate'], None, PAYLOAD)
+    assert drafter_client.get(f'{URL}{item.pk}/').status_code == 200
+    assert drafter_client.get(url).status_code == 403
 
 
 def test_status_history_openapi(sample_app):

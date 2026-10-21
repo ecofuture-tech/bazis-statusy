@@ -90,7 +90,7 @@ text = "validators are also called with payload_validate_none (to build state_ac
 text = "a transit of the parent validates its StatusyChildMixin children; it needs only the transit permission of the parent"
 
 [[pitfalls]]
-text = "the payload of a transit is one object with the fields of the payload models of all its validators and actions; without an object (a contract export) it is the classmethod Model.get_transit_payload_type(transit), the one to override"
+text = "the payload of a transit is one object with the fields of the payload models of all its validators and actions; without an object (a contract export) it is the classmethod Model.get_transit_payload_type(transit), the one to override (item.transit_payload_type is the same under its old name, not a hook)"
 
 [[pitfalls]]
 text = "titles of payload fields stay lazy: Field(title=gettext_lazy(...)), never str()"
@@ -99,7 +99,7 @@ text = "titles of payload fields stay lazy: Field(title=gettext_lazy(...)), neve
 text = "transit_apply() in code checks no permissions and makes only a transit from the current status: take it with item.get_transit(id)"
 
 [[pitfalls]]
-text = "the validated payload of a transit is kept in its history record (extra['payload']) and read with the item.history permission: GET /{item_id}/status_history/; keep no secret in it or mark the field Field(exclude=True)"
+text = "the validated payload of a transit is kept in its history record (extra['payload']) and read with the item.history permission: GET /{item_id}/status_history/; keep no secret in it or mark the field Annotated[..., NOT_IN_HISTORY] (bazis.contrib.statusy.schemas): validated and given to the methods, not kept"
 
 [[pitfalls]]
 text = "a transit the system makes passes user None to transit_apply, not the user of the request"

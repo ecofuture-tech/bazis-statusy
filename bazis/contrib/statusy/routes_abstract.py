@@ -290,7 +290,9 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
             data=[
                 StatusHistoryRecordSchema(
                     transit=StatusHistoryTransitSchema(id=it.transit_id, name=it.transit.name),
-                    status_src=it.transit.status_src_id,
+                    # a record made before 2.15 keeps no source status: the one of the
+                    # current definition of the transit
+                    status_src=it.extra.get('status_src') or it.transit.status_src_id,
                     status_dst=it.status_id,
                     dt=it.dt,
                     author=(
@@ -311,7 +313,7 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
                 continue
 
             # compute the payload data type
-            payload_type = item.transit_payload_type(transit)
+            payload_type = item.get_transit_payload_type(transit)
             # the name of the body schema is the same on every Python: `dict | None` is named
             # `Union` on 3.14 and has no name on 3.12 and 3.13
             payload_name = payload_type.__name__ if payload_type else 'DictOrNone'

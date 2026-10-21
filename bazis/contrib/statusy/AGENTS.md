@@ -187,10 +187,10 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
   of it runs in one transaction with the history record.
 - **The payload type** comes from the annotations of the parameter `payload` of the
   validators and the actions of the transit: each annotation is a pydantic model, and the
-  transit's payload type is one model inheriting all of them (`item.transit_payload_type
-  (transit)`; without an object, from the model class: the classmethod
-  `Model.get_transit_payload_type(transit)`, which the instance method calls: override that
-  one): the client sends one `payload` object with the fields of all the models, it
+  transit's payload type is one model inheriting all of them: the payload type is
+  `Model.get_transit_payload_type(transit)`, a classmethod (it does not depend on an
+  object): override it; `item.transit_payload_type(transit)` is the same under its old
+  name. The client sends one `payload` object with the fields of all the models, it
   is validated as a whole (422 with an error per invalid field, 400 `This transition
   requires a payload` when it is missing), and every method receives that
   same object. A `payload` without an annotation adds nothing; a transit whose methods have
@@ -282,7 +282,7 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
   or an instance of a payload model (`ClosePayload(dt_closed=...)`, bazis-statusy 2.12),
   validated as its data with the payload type of the transit: a transit whose methods
   annotate several payload models takes the fields of all of them, so pass the dict, or
-  an instance of `item.transit_payload_type(transit)`; missing fields are 422
+  an instance of `Model.get_transit_payload_type(transit)`; missing fields are 422
   (`JsonApiBazisException`), as on the endpoint. The methods receive the instance of the
   payload type, not the object passed. It runs the
   validators (with `user`), writes the history record, runs the actions before, sets
@@ -324,14 +324,18 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
   validated payload (`model_dump(mode='json', by_alias=True)` of the payload type), under
   `extra['payload']`; a transit without a payload type, or a record made before 2.15,
   has none. **Whoever has the `history` permission reads the payload** (the route below):
-  keep no secret in it, or exclude the field from the dump, `Field(exclude=True)` of the
-  payload model: sent as a dict (the endpoint) it is validated and passed to the actions,
-  but not stored; a payload model instance passed to `transit_apply` loses it before the
-  validation, so pass a dict there. No migration: `extra` is the field of the record.
+  keep no secret in it, or mark the field `NOT_IN_HISTORY`
+  (`from bazis.contrib.statusy.schemas import NOT_IN_HISTORY`; `secret: Annotated[str |
+  None, NOT_IN_HISTORY] = None` in the payload model): it is validated and the methods of
+  the transit receive it, from a dict (the endpoint) or a payload model instance
+  (`transit_apply`), but the record does not keep it. The mark is read on the fields of the
+  payload model itself, not inside its nested models. No migration: `extra` is the field of
+  the record.
 - The history: `item.statusy_transits` (the model `<Model>StatusyTransit` of the app), one
   record per transit with `transit`, `status` (the new one), `dt`, `author` and `extra`
-  (JSON; `{"payload": {...}}` for a transit made with a payload, else `{}`; an action
-  may add keys of its own, not touch `payload`); order it by `dt`. `StatusyAdminMixin` shows it in the admin. A status
+  (JSON, since 2.15 `{"status_src": "<the status it started from>", "payload": {...}}`,
+  `payload` only for a transit with a payload type; an action may add keys of its own, not
+  touch these; `{}` for a record made before 2.15); order it by `dt`. `StatusyAdminMixin` shows it in the admin. A status
   written without a transit (`QuerySet.update(status=...)` in test data) has no record.
 
 ### The history in the API: `status_history`
@@ -347,11 +351,15 @@ plain JSON document, not a JSON:API one:
 ```
 
 The oldest first; `author` is null for a transit of the system, `payload` null for a
-transit without one. It needs the permission `item.history` of the item (selector and status, as the other
+transit without one; `status_src` is the status the transit started from, kept in the
+record (for a record made before 2.15, the source status of the current definition of the
+transit). It needs the permission `item.history` of the item (selector and status, as the other
 item permissions); an item the user cannot view is 404 first, as at its retrieve, a user
-without `history` is 403. The permission is its own, not `view`, because the history
-shows data the field permissions of the item may hide (the payloads, the statuses): grant
-it only to the roles that may read them. A route set that should not give it lists its
+without `history` is 403. The permission is its own, not `view`, because of the payloads
+(and the names of the transits): what the users sent with the transits, which `view` of
+the item does not show. Grant it only to the roles that may read them. The calculated
+field `status_history` (below) is the compact form, read with the item in one subquery
+under `view`; the route is the full, canonical form. A route set that should not give it lists its
 `actions` without `action_status_history`.
 
 `StatusyMixin` also has the calculated field `status_history` (bazis-statusy 2.12): the transits of the item, the
