@@ -250,7 +250,12 @@ def test_transit(sample_app):
         [action] = response.json()['meta']['state_actions']
         body = action['endpoint']['body']
         assert body['properties']['transit']['default'] == transit_to_active.id
+        # named after the payload models, not after their ids (they change on every start)
+        assert body['title'] == 'PayloadType_ParentEntityBeforeSchema_ParentEntityValidatedSchema_body_type'
         [payload] = body['$defs'].values()
+        # the fields follow the sorted payload models: the same schema on every start
+        assert list(payload['properties']) == ['must_active', 'dt_approved']
+        assert payload['required'] == ['must_active', 'dt_approved']
         assert payload['properties']['dt_approved']['title'] == title
 
     # the correct transition is not available because validation for is_active == True fails

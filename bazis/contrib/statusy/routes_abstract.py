@@ -279,11 +279,15 @@ class StatusyRouteSetBase(StatusySimpleRouteSetBase):
                 continue
 
             # compute the payload data type
-            payload_type = item.transit_payload_type(transit) or (dict | None)
+            payload_type = item.transit_payload_type(transit)
+            # the name of the body schema is the same on every Python: `dict | None` is named
+            # `Union` on 3.14 and has no name on 3.12 and 3.13
+            payload_name = payload_type.__name__ if payload_type else 'DictOrNone'
+            payload_type = payload_type or (dict | None)
 
             # compute the request body data type
             body_type = create_model(
-                getattr(payload_type, '__name__', 'DictOrNone') + '_body_type',
+                payload_name + '_body_type',
                 __base__=TransitActionEndpointBodySchema[payload_type],
                 transit=(Annotated[str, Field()], Field(default=transit.id)),
             )
