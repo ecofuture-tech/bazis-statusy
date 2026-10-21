@@ -54,9 +54,9 @@ from bazis.core.utils.schemas import TranslatedSchemaModel
 
 from . import TransitChildrenError, TransitError
 from .schemas import (
-    NOT_IN_HISTORY,
     StatusHistoryEntry,
     StatusyApiAction,
+    fields_not_in_history,
     payload_validate_none,
 )
 
@@ -484,6 +484,9 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
         # in a fixed order: it sets the order of the fields of the schema and the name
         payload_types = tuple(sorted(set(payload_types), key=lambda cl: (cl.__name__, cl.__module__)))
         payload_types_names = [cl.__name__ for cl in payload_types]
+        # a NOT_IN_HISTORY mark the history would not honor fails here, with the schemas
+        for payload_type in payload_types:
+            fields_not_in_history(payload_type)
         # return the resulting class: its JSON schema has the lazy titles of the fields in the
         # active language. Its texts are stripped before their length is checked, as the
         # forms of Django do: a required text (`min_length=1`) of only spaces is refused
@@ -661,11 +664,7 @@ class StatusyMixin(PermitModelMixin, JsonApiMixin):
             extra['payload'] = payload_obj.model_dump(
                 mode='json',
                 by_alias=True,
-                exclude={
-                    name
-                    for name, field in type(payload_obj).model_fields.items()
-                    if NOT_IN_HISTORY in field.metadata
-                },
+                exclude=fields_not_in_history(type(payload_obj)),
             )
 
         with defer_validate_item(self, source='transit', user=user, savepoint=False):

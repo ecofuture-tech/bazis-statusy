@@ -325,12 +325,15 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
   `extra['payload']`; a transit without a payload type, or a record made before 2.15,
   has none. **Whoever has the `history` permission reads the payload** (the route below):
   keep no secret in it, or mark the field `NOT_IN_HISTORY`
-  (`from bazis.contrib.statusy.schemas import NOT_IN_HISTORY`; `secret: Annotated[str |
-  None, NOT_IN_HISTORY] = None` in the payload model): it is validated and the methods of
+  (`from bazis.contrib.statusy.schemas import NOT_IN_HISTORY`; in the payload model
+  `secret: Annotated[str | None, NOT_IN_HISTORY] = None`, or the mark on a member of its
+  `Optional`, `Annotated[str, NOT_IN_HISTORY] | None`): it is validated and the methods of
   the transit receive it, from a dict (the endpoint) or a payload model instance
-  (`transit_apply`), but the record does not keep it. The mark is read on the fields of the
-  payload model itself, not inside its nested models. No migration: `extra` is the field of
-  the record.
+  (`transit_apply`), but the record does not keep the field. The mark goes on a field of
+  the payload model only: one elsewhere (an item of a list or a dict, a field of a nested
+  model) is `ImproperlyConfigured` when the payload type is built (the transit, its
+  `state_actions`, the contract export), naming the field. No migration: `extra` is the
+  field of the record.
 - The history: `item.statusy_transits` (the model `<Model>StatusyTransit` of the app), one
   record per transit with `transit`, `status` (the new one), `dt`, `author` and `extra`
   (JSON, since 2.15 `{"status_src": "<the status it started from>", "payload": {...}}`,

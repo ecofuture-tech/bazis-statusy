@@ -99,7 +99,7 @@ text = "titles of payload fields stay lazy: Field(title=gettext_lazy(...)), neve
 text = "transit_apply() in code checks no permissions and makes only a transit from the current status: take it with item.get_transit(id)"
 
 [[pitfalls]]
-text = "the validated payload of a transit is kept in its history record (extra['payload']) and read with the item.history permission: GET /{item_id}/status_history/; keep no secret in it or mark the field Annotated[..., NOT_IN_HISTORY] (bazis.contrib.statusy.schemas): validated and given to the methods, not kept"
+text = "the validated payload of a transit is kept in its history record (extra['payload']) and read with the item.history permission: GET /{item_id}/status_history/; keep no secret in it or mark the field Annotated[..., NOT_IN_HISTORY] (bazis.contrib.statusy.schemas; on the field or a member of its Optional): validated and given to the methods, not kept; a mark inside a list or a nested model is ImproperlyConfigured"
 
 [[pitfalls]]
 text = "a transit the system makes passes user None to transit_apply, not the user of the request"
