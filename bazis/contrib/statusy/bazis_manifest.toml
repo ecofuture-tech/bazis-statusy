@@ -90,7 +90,7 @@ text = "validators are also called with payload_validate_none (to build state_ac
 text = "a transit of the parent validates its StatusyChildMixin children; it needs only the transit permission of the parent"
 
 [[pitfalls]]
-text = "the payload of a transit is one object with the fields of the payload models of all its validators and actions"
+text = "the payload of a transit is one object with the fields of the payload models of all its validators and actions; without an object (a contract export) it is the classmethod Model.get_transit_payload_type(transit), the one to override"
 
 [[pitfalls]]
 text = "titles of payload fields stay lazy: Field(title=gettext_lazy(...)), never str()"

@@ -188,7 +188,9 @@ def after_x(self, statusy_transit: StatusyTransit, payload): ...
 - **The payload type** comes from the annotations of the parameter `payload` of the
   validators and the actions of the transit: each annotation is a pydantic model, and the
   transit's payload type is one model inheriting all of them (`item.transit_payload_type
-  (transit)`): the client sends one `payload` object with the fields of all the models, it
+  (transit)`; without an object, from the model class: the classmethod
+  `Model.get_transit_payload_type(transit)`, which the instance method calls: override that
+  one): the client sends one `payload` object with the fields of all the models, it
   is validated as a whole (422 with an error per invalid field, 400 `This transition
   requires a payload` when it is missing), and every method receives that
   same object. A `payload` without an annotation adds nothing; a transit whose methods have
